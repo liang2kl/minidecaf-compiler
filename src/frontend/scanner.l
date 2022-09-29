@@ -63,13 +63,13 @@ IDENTIFIER    ([A-Za-z][_0-9A-Za-z]*)
 {NEWLINE}     { loc.lines (yyleng); loc.step (); }
 "//"          { BEGIN(C);         }
 <C>{NEWLINE}  { BEGIN(0); loc.lines (yyleng); loc.step ();        }
-<C><EOF>      { return yy::parser::make_END (loc); }
+<C><<EOF>>      { return yy::parser::make_END (loc); }
 <C>.          { /* ignore */      }
 
 "/*"          { BEGIN(B); }
 <B>"*/"       { BEGIN(0); }
 <B>.|\n ;  
-<B><EOF> { return yy::parser::make_END (loc); }
+<B><<EOF>> { return yy::parser::make_END (loc); }
 <<EOF>> { return yy::parser::make_END (loc); }
 
 "int"         { return yy::parser::make_INT  (loc);      }
