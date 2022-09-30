@@ -1,3 +1,3 @@
 cd src/
-make
+make CI=${GITLAB_CI}
 cd ..

@@ -126,4 +126,4 @@ void scan_begin(const char* filename){
 void scan_end(){
    if (yyin != stdin)
 	  std::fclose(yyin);
-}
+} 
