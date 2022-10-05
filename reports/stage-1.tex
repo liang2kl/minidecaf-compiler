@@ -174,8 +174,6 @@ void SemPass2::visit(ast::SubExpr *e) {
     \item \texttt{MOD}：\texttt{rem}
     \item \texttt{LES}：\texttt{slt}
     \item \texttt{GTR}：\texttt{sgt}
-    \item \texttt{LAND}：\texttt{and}
-    \item \texttt{LOR}：\texttt{or}
 \end{itemize}
 
 其余中间代码没有对应的汇编，需要组合多条汇编代码实现：
@@ -185,6 +183,8 @@ void SemPass2::visit(ast::SubExpr *e) {
     \item \texttt{NEQ}：\texttt{sub} + \texttt{snez}
     \item \texttt{LEQ}：\texttt{sgt} + \texttt{seqz}
     \item \texttt{GEQ}：\texttt{slt} + \texttt{seqz}
+    \item \texttt{LAND}：\texttt{and} + \texttt{snez}
+    \item \texttt{LOR}：\texttt{or} + \texttt{snez}
 \end{itemize}
 
 \section{思考题}
