@@ -287,10 +287,14 @@ void RiscvDesc::emitTac(Tac *t) {
 
     case Tac::LAND:
         emitBinaryTac(RiscvInstr::AND, t);
+        t->op1 = t->op0;
+        emitUnaryTac(RiscvInstr::SNEZ, t);
         break;
     
     case Tac::LOR:
         emitBinaryTac(RiscvInstr::OR, t);
+        t->op1 = t->op0;
+        emitUnaryTac(RiscvInstr::SNEZ, t);
         break;
 
     default:
