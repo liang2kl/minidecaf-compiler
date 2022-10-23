@@ -94,9 +94,11 @@ void scan_end();
 %nterm<mind::ast::Program* > Program FoDList
 %nterm<mind::ast::FuncDefn* > FuncDefn
 %nterm<mind::ast::Type*> Type
-%nterm<mind::ast::Statement*> Stmt  ReturnStmt ExprStmt IfStmt  CompStmt WhileStmt 
+%nterm<mind::ast::Statement*> Stmt  ReturnStmt ExprStmt IfStmt  CompStmt WhileStmt DeclStmt
 %nterm<mind::ast::Expr*> Expr
+%nterm<mind::ast::VarRef*> VarRef
 /*   SUBSECTION 2.2: associativeness & precedences */
+%right ASSIGN
 %nonassoc QUESTION
 %left     OR
 %left     AND
@@ -147,11 +149,12 @@ StmtList    : /* empty */
                   $$ = $1; }
             ;
 
-Stmt        : ReturnStmt {$$ = $1;}|
-              ExprStmt   {$$ = $1;}|
-              IfStmt     {$$ = $1;}|
-              WhileStmt  {$$ = $1;}|
-              CompStmt   {$$ = $1;}|
+Stmt        : ReturnStmt {$$ = $1;} |
+              ExprStmt   {$$ = $1;} |
+              IfStmt     {$$ = $1;} |
+              WhileStmt  {$$ = $1;} |
+              CompStmt   {$$ = $1;} |
+              DeclStmt   {$$ = $1;} |
               BREAK SEMICOLON  
                 {$$ = new ast::BreakStmt(POS(@1));} |
               SEMICOLON
@@ -174,9 +177,21 @@ ReturnStmt  : RETURN Expr SEMICOLON
             ;
 ExprStmt    : Expr SEMICOLON
                 { $$ = new ast::ExprStmt($1, POS(@1)); } 
-            ;         
+            ;
+DeclStmt    : Type IDENTIFIER SEMICOLON
+                { $$ = new ast::VarDecl($2, $1, POS(@1)); }
+            | Type IDENTIFIER ASSIGN Expr SEMICOLON
+                { $$ = new ast::VarDecl($2, $1, $4, POS(@1)); }
+            ;
+VarRef      : IDENTIFIER
+                { $$ = new ast::VarRef($1, POS(@1)); }
+            ;
 Expr        : ICONST
-                { $$ = new ast::IntConst($1, POS(@1)); }            
+                { $$ = new ast::IntConst($1, POS(@1)); }
+            | VarRef
+                { $$ = new ast::LvalueExpr($1, POS(@1)); }
+            | VarRef ASSIGN Expr
+                { $$ = new ast::AssignExpr($1, $3, POS(@2)); }
             | LPAREN Expr RPAREN
                 { $$ = $2; }
             /* Unary */
@@ -217,7 +232,6 @@ Expr        : ICONST
             | Expr QUESTION Expr COLON Expr %prec QUESTION
                 { $$ = new ast::IfExpr($1,$3,$5,POS(@2)); }
             ;
-
 %%
 
 /* SECTION IV: customized section */

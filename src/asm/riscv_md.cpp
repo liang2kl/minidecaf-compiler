@@ -296,10 +296,24 @@ void RiscvDesc::emitTac(Tac *t) {
         t->op1 = t->op0;
         emitUnaryTac(RiscvInstr::SNEZ, t);
         break;
+    
+    case Tac::ASSIGN:
+        emitAssignTac(t);
+        break;
 
     default:
         mind_assert(false); // should not appear inside a basic block
     }
+}
+
+void RiscvDesc::emitAssignTac(Tac *t) {
+    // eliminates useless assignments
+    if (!t->LiveOut->contains(t->op0.var))
+        return;
+    
+    int r0 = getRegForWrite(t->op0.var, 0, 0, t->LiveOut);
+    int r1 = getRegForRead(t->op1.var, r0, t->LiveOut);
+    addInstr(RiscvInstr::ADD, _reg[r0], _reg[RiscvReg::ZERO], _reg[r1], 0, EMPTY_STR, NULL);
 }
 
 /* Translates a LoadImm4 TAC into Riscv instructions.

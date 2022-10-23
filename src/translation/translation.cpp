@@ -91,7 +91,24 @@ void Translation::visit(ast::FuncDefn *f) {
  *   different kinds of Lvalue require different translation
  */
 void Translation::visit(ast::AssignExpr *s) {
-    // TODO
+    ast::VarRef *ref;
+    switch (s->left->getKind()) {
+        case ast::ASTNode::VAR_REF:
+            ref = dynamic_cast<ast::VarRef *>(s->left);
+            mind_assert(ref != NULL);
+            ref->accept(this);
+            s->e->accept(this);
+            if (ref->ATTR(sym)->isGlobalVar()) {
+                // TODO: Implementation
+                mind_assert(false);
+            } else {
+                tr->genAssign(ref->ATTR(sym)->getTemp(), s->e->ATTR(val));
+                s->ATTR(val) = ref->ATTR(sym)->getTemp();
+            }
+            break;
+        default:
+            mind_assert(false);
+    }
 }
 
 /* Translating an ast::ExprStmt node.
@@ -281,7 +298,23 @@ void Translation::visit(ast::NotExpr *e) {
  *   different Lvalue kinds need different translation
  */
 void Translation::visit(ast::LvalueExpr *e) {
-    // TODO
+    ast::VarRef *ref;
+    switch (e->lvalue->getKind()) {
+    case ast::ASTNode::VAR_REF:
+        ref = dynamic_cast<ast::VarRef *>(e->lvalue);
+        mind_assert(ref != NULL);
+        ref->accept(this);
+
+        if (ref->ATTR(sym)->isGlobalVar()) {
+            // TODO: Implementation
+            mind_assert(false);
+        } else {
+            e->ATTR(val) = ref->ATTR(sym)->getTemp();
+        }
+        break;
+    default:
+        mind_assert(false);
+    }
 }
 
 /* Translating an ast::VarRef node.
@@ -305,7 +338,16 @@ void Translation::visit(ast::VarRef *ref) {
 /* Translating an ast::VarDecl node.
  */
 void Translation::visit(ast::VarDecl *decl) {
-    // TODO
+    if (decl->ATTR(sym)->isGlobalVar()) {
+        // TODO: implementation
+        mind_assert(false);
+    } else {
+        decl->ATTR(sym)->attachTemp(tr->getNewTempI4());
+        if (decl->init != NULL) {
+            decl->init->accept(this);
+            tr->genAssign(decl->ATTR(sym)->getTemp(), decl->init->ATTR(val));
+        }
+    }
 }
 
 /* Translates an entire AST into a Piece list.
