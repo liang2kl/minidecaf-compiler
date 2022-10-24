@@ -99,7 +99,7 @@ void scan_end();
 %nterm<mind::ast::VarRef*> VarRef
 /*   SUBSECTION 2.2: associativeness & precedences */
 %right ASSIGN
-%nonassoc QUESTION
+%right QUESTION
 %left     OR
 %left     AND
 %left EQU NEQ
@@ -147,14 +147,16 @@ StmtList    : /* empty */
             | StmtList Stmt
                 { $1->append($2);
                   $$ = $1; }
-            ;
+            | StmtList DeclStmt
+                { $1->append($2);
+                  $$ = $1; }
 
 Stmt        : ReturnStmt {$$ = $1;} |
               ExprStmt   {$$ = $1;} |
               IfStmt     {$$ = $1;} |
               WhileStmt  {$$ = $1;} |
               CompStmt   {$$ = $1;} |
-              DeclStmt   {$$ = $1;} |
+              /* DeclStmt   {$$ = $1;} | */
               BREAK SEMICOLON  
                 {$$ = new ast::BreakStmt(POS(@1));} |
               SEMICOLON

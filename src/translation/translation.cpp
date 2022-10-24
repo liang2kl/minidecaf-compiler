@@ -292,6 +292,28 @@ void Translation::visit(ast::NotExpr *e) {
     e->ATTR(val) = tr->genLNot(e->e->ATTR(val));
 }
 
+void Translation::visit(ast::IfExpr *e) {
+    Label falseLabel = tr->getNewLabel();
+    Label trueLabel = tr->getNewLabel();
+
+    e->condition->accept(this);
+
+    Temp temp = tr->getNewTempI4();
+    
+    tr->genJumpOnZero(falseLabel, e->condition->ATTR(val));
+    e->true_brch->accept(this);
+    tr->genAssign(temp, e->true_brch->ATTR(val));
+    tr->genJump(trueLabel);
+
+    tr->genMarkLabel(falseLabel);
+    e->false_brch->accept(this);
+    tr->genAssign(temp, e->false_brch->ATTR(val));
+
+    tr->genMarkLabel(trueLabel);
+
+    e->ATTR(val) = temp;
+}
+
 /* Translating an ast::LvalueExpr node.
  *
  * NOTE:
