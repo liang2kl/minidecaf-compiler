@@ -1,0 +1,250 @@
+\documentclass[a4paper]{article}
+\usepackage{listings}
+\usepackage{ctex}
+\usepackage[svgnames]{xcolor}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{parskip}
+
+\setlength{\parskip}{6pt}
+
+\author{梁业升 2019010547（计03）}
+
+\lstdefinelanguage{diff} {
+    basicstyle=\ttfamily\small,
+    morecomment=[f][\color{diffstart}]{@@},
+    morecomment=[f][\color{diffincl}]{+\ },
+    morecomment=[f][\color{diffrem}]{-\ },
+  }
+
+\begin{document}
+
+% GitHub styles
+\definecolor{keyword}{HTML}{CF222E}
+\definecolor{comment}{HTML}{6E7781}
+\definecolor{string}{HTML}{0A3069}
+\definecolor{diffstart}{named}{Grey}
+\definecolor{diffincl}{named}{Green}
+\definecolor{diffrem}{named}{OrangeRed}
+
+\lstset{
+    commentstyle=\color{comment},
+    keywordstyle=\color{keyword},
+    stringstyle=\color{string},
+    basicstyle=\ttfamily\small,
+    breakatwhitespace=false,
+    breaklines=true,
+    captionpos=b,
+    keepspaces=true,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+}
+
+
+
+\title{MiniDecaf Stage 2 Report}
+
+\maketitle
+
+\section{实验内容}
+
+\subsection{词法语法分析}
+
+局部变量声明：
+
+\begin{lstlisting}[language=diff]
++ DeclStmt    : Type IDENTIFIER SEMICOLON
++                 { $$ = new ast::VarDecl($2, $1, POS(@1)); }
++             | Type IDENTIFIER ASSIGN Expr SEMICOLON
++                 { $$ = new ast::VarDecl($2, $1, $4, POS(@1)); }
++             ;
++ VarRef      : IDENTIFIER
++                 { $$ = new ast::VarRef($1, POS(@1)); }
++             ;
+\end{lstlisting}    
+
+变量引用：
+
+\begin{lstlisting}[language=diff]
++ VarRef      : IDENTIFIER
++                 { $$ = new ast::VarRef($1, POS(@1)); }
++             ;
+\end{lstlisting}    
+
+赋值表达式
+
+\begin{lstlisting}[language=diff]
+  Expr        : ICONST
+                  { $$ = new ast::IntConst($1, POS(@1)); }
++             | VarRef
++                 { $$ = new ast::LvalueExpr($1, POS(@1)); }
++             | VarRef ASSIGN Expr
++                 { $$ = new ast::AssignExpr($1, $3, POS(@2)); }
+              | LPAREN Expr RPAREN
+...
+\end{lstlisting}
+
+需要注意的是变量声明语句（\texttt{DeclStmt}）不属于语句，所以不能放在 \texttt{Stmt} 中；但其可以和其他语句组成复合语句，因此
+需要在 \texttt{StmtList} 中加上：
+
+\begin{lstlisting}[language=diff]
+  StmtList    : /* empty */
+                  { $$ = new ast::StmtList(); }
+              | StmtList Stmt
+                  { $1->append($2); $$ = $1; }
++             | StmtList DeclStmt
++                 { $1->append($2); $$ = $1; }
+\end{lstlisting}
+
+另外，\texttt{IfStmt} 和 \texttt{IfExpr} 在框架中已给出，在此不再赘述。
+
+\subsection{符号表构建}
+
+在第一个 Pass，对于 \texttt{VarDecl} 节点，在当前作用域中添加符号表项，并给节点添加对应的符号：
+
+\begin{lstlisting}[language=c++]
+void SemPass1::visit(ast::VarDecl *vdecl) {
+    Type *t = NULL;
+    vdecl->type->accept(this);
+    t = vdecl->type->ATTR(type);
+
+    Variable *var = new Variable(vdecl->name, t, vdecl->getLocation());
+    if (scopes->lookup(vdecl->name, vdecl->getLocation(), false) != nullptr) {
+        issue(vdecl->getLocation(), new DeclConflictError(vdecl->name, var));
+    } else {
+        scopes->declare(var);
+        vdecl->ATTR(sym) = var;
+    }
+}
+\end{lstlisting}
+
+\subsection{类型检查}
+
+针对新增的表达式 \texttt{IfExpr} 增加类型检查（其余新增的表达式在框架中已给出）：
+
+\begin{lstlisting}[language=c++]
+void SemPass2::visit(ast::IfExpr *e) {
+    e->condition->accept(this);
+    expect(e->condition, BaseType::Int);
+
+    e->true_brch->accept(this);
+    expect(e->true_brch, BaseType::Int);
+
+    e->false_brch->accept(this);
+    expect(e->false_brch, BaseType::Int);
+
+    e->ATTR(type) = BaseType::Int;
+}
+\end{lstlisting}
+
+\subsection{翻译为中间代码}
+
+对于 \texttt{IfExpr}，我们需要支持短路求值，因此需要用到条件跳转。例如，对于 \texttt{a = cond ? 1 : 0}，对应的
+三地址码如下（设 \texttt{a} 和 \texttt{cond} 的寄存器分别为 \texttt{T1} 和 \texttt{T2}）：
+
+\begin{lstlisting}
+    JZERO  T2, L1
+    ASSIGN T1, 1
+    JUMP   L2
+L1:
+    ASSIGN T1, 0
+L2:
+\end{lstlisting}
+
+对应的翻译代码如下：
+
+\begin{lstlisting}[language=c++]
+void Translation::visit(ast::IfExpr *e) {
+    Label falseLabel = tr->getNewLabel();
+    Label trueLabel = tr->getNewLabel();
+
+    e->condition->accept(this);
+
+    Temp temp = tr->getNewTempI4();
+
+    tr->genJumpOnZero(falseLabel, e->condition->ATTR(val));
+    e->true_brch->accept(this);
+    tr->genAssign(temp, e->true_brch->ATTR(val));
+    tr->genJump(trueLabel);
+
+    tr->genMarkLabel(falseLabel);
+    e->false_brch->accept(this);
+    tr->genAssign(temp, e->false_brch->ATTR(val));
+
+    tr->genMarkLabel(trueLabel);
+
+    e->ATTR(val) = temp;
+}
+\end{lstlisting}
+
+对于 \texttt{VarDecl}，我们需要为变量（符号）分配一个临时寄存器（本阶段只考虑局部变量）；如有初始化，则进行赋值：
+
+\begin{lstlisting}[language=c++]
+void Translation::visit(ast::VarDecl *decl) {
+    if (decl->ATTR(sym)->isGlobalVar()) {
+        mind_assert(false);
+    } else {
+        decl->ATTR(sym)->attachTemp(tr->getNewTempI4());
+        if (decl->init != NULL) {
+            decl->init->accept(this);
+            tr->genAssign(decl->ATTR(sym)->getTemp(), decl->init->ATTR(val));
+        }
+    }
+}
+\end{lstlisting}
+
+对于 \texttt{LvalueExpr}，我们将对应符号的寄存器附在左值节点上：
+
+\begin{lstlisting}[language=c++]
+void Translation::visit(ast::LvalueExpr *e) {
+    ast::VarRef *ref;
+    switch (e->lvalue->getKind()) {
+    case ast::ASTNode::VAR_REF:
+        ref = dynamic_cast<ast::VarRef *>(e->lvalue);
+        mind_assert(ref != NULL);
+        ref->accept(this);
+
+        if (ref->ATTR(sym)->isGlobalVar()) {
+            mind_assert(false);
+        } else {
+            e->ATTR(val) = ref->ATTR(sym)->getTemp();
+        }
+        break;
+    default:
+        mind_assert(false);
+    }
+}
+\end{lstlisting}
+
+\subsection{生成机器代码}
+
+本阶段需要新增的三地址码翻译只有 \texttt{ASSIGN}，我们使用 \texttt{add rd, x0, rs1} 即可完成赋值：
+
+\begin{lstlisting}[language=c++]
+void RiscvDesc::emitAssignTac(Tac *t) {
+    // eliminates useless assignments
+    if (!t->LiveOut->contains(t->op0.var))
+        return;
+
+    int r0 = getRegForWrite(t->op0.var, 0, 0, t->LiveOut);
+    int r1 = getRegForRead(t->op1.var, r0, t->LiveOut);
+    addInstr(RiscvInstr::ADD, _reg[r0], _reg[RiscvReg::ZERO], _reg[r1], 0, EMPTY_STR, NULL);
+}    
+\end{lstlisting}
+
+\section{思考题}
+
+\begin{enumerate}
+    \item \textbf{Step 5}：\begin{enumerate}
+        \item \textbf{1}：\texttt{addi sp, sp, -26}
+        \item \textbf{2}：定义：省略判断命名重复的步骤，直接覆盖即可；查找：无影响。
+    \end{enumerate}
+    \item \textbf{Step 6}：\begin{enumerate}
+        \item \textbf{1}：Bison 默认使用 Shift。
+        \item \textbf{2}：将两个 branch 分别执行完，再根据条件进行赋值。
+    \end{enumerate}
+\end{enumerate}
+
+
+\end{document}
