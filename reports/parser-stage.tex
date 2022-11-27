@@ -1,0 +1,124 @@
+\documentclass[a4paper]{article}
+\usepackage{listings}
+\usepackage{ctex}
+\usepackage[svgnames]{xcolor}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{parskip}
+
+\setlength{\parskip}{6pt}
+
+\author{梁业升 2019010547（计03）}
+
+\lstdefinelanguage{diff} {
+    basicstyle=\ttfamily\small,
+    morecomment=[f][\color{diffstart}]{@@},
+    morecomment=[f][\color{diffincl}]{+\ },
+    morecomment=[f][\color{diffrem}]{-\ },
+  }
+
+\begin{document}
+
+% GitHub styles
+\definecolor{keyword}{HTML}{CF222E}
+\definecolor{comment}{HTML}{6E7781}
+\definecolor{string}{HTML}{0A3069}
+\definecolor{diffstart}{named}{Grey}
+\definecolor{diffincl}{named}{Green}
+\definecolor{diffrem}{named}{OrangeRed}
+
+\lstset{
+  commentstyle=\color{comment},
+  keywordstyle=\color{keyword},
+  stringstyle=\color{string},
+  basicstyle=\ttfamily\small,
+  breakatwhitespace=false,
+  breaklines=true,
+  captionpos=b,
+  keepspaces=true,
+  showspaces=false,
+  showstringspaces=false,
+  showtabs=false,
+}
+
+
+
+\title{MiniDecaf Parser Stage Report}
+
+\maketitle
+
+\section{实验内容}
+
+本次实验比较简单，根据文法实现相应的递归下降算法即可。
+
+大部分的补全部分是基于 LL(1) 文法的递归下降，直接按照文法递归地调用对应的解析函数即可，如：
+
+\begin{lstlisting}[language=c++]
+if (next_token.type == TokenType::RETURN) {
+    return p_Return();
+} else if (next_token.type == TokenType::IF) {
+    return p_If();
+} else if (next_token.type == TokenType::LPAREN) {
+    lookahead(TokenType::LPAREN);
+    ast::Expr *expr = p_Expression();
+    lookahead(TokenType::RPAREN);
+    lookahead(TokenType::SEMICOLON);
+    return new ast::ExprStmt(expr, expr->getLocation());
+} else if (next_token.type == TokenType::LBRACE) {
+    return p_Block();
+} else if (next_token.type == TokenType::SEMICOLON) {
+    lookahead(TokenType::SEMICOLON);
+    return new ast::EmptyStmt(next_token.loc);
+}
+\end{lstlisting}
+
+而对于包含左递归的文法，根据提示，转换为 EBNF 文法，并使用 \texttt{while} 循环进行解析：
+
+\begin{lstlisting}[language=c++]
+while (next_token.type == TokenType::OR) {
+    Token Or = lookahead();
+    ast::Expr *operand2 = p_LogicalAnd();
+    node = new ast::OrExpr(node, operand2, Or.loc);
+}
+\end{lstlisting}
+
+所有的待填空部分均为这两种情况之一，在代码中均有体现，在此不再赘述。
+
+\section{思考题}
+
+1. 原文法：
+
+\begin{lstlisting}
+additive : additive '+' multiplicative
+         | additive '-' multiplicative
+         | multiplicative
+\end{lstlisting}
+
+不含左递归的文法：
+
+\begin{lstlisting}
+additive : multiplicative A
+A        : '+' multiplicative A
+         | '-' multiplicative A
+         | epsilon
+\end{lstlisting}
+
+2. 在递归解析某一条文法规则时，如果下一个 token 匹配错误，则继续消耗 token，直到遇到文法左侧
+非终结符的同步集合中的元素，则视为开始下一个文法规则的匹配。
+
+例如：
+
+\begin{lstlisting}[language=c++]
+int a = ;
+int b = 0;
+\end{lstlisting}
+
+第一行对应的文法为：
+
+\begin{lstlisting}
+DeclStmt : Type IDENTIFIER ASSIGN Expr SEMICOLON
+\end{lstlisting}
+
+\texttt{DeclStmt} 同步集合中包含关键字 \texttt{int}，因此遇到第二行的 \texttt{int} 时即视为错误已解决。
+
+\end{document}
