@@ -141,23 +141,39 @@ void Translation::visit(ast::WhileStmt *s) {
     Label L2 = tr->getNewLabel();
 
     Label old_break = current_break_label;
+    Label old_continue = current_continue_label;
     current_break_label = L2;
+    current_continue_label = L1;
 
     tr->genMarkLabel(L1);
-    s->condition->accept(this);
-    tr->genJumpOnZero(L2, s->condition->ATTR(val));
+
+    if (!s->hasDo) {
+            s->condition->accept(this);
+            tr->genJumpOnZero(L2, s->condition->ATTR(val));
+    }
 
     s->loop_body->accept(this);
+
+    if (s->hasDo) {
+            s->condition->accept(this);
+            tr->genJumpOnZero(L2, s->condition->ATTR(val));
+    }
+
     tr->genJump(L1);
 
     tr->genMarkLabel(L2);
 
     current_break_label = old_break;
+    current_continue_label = old_continue;
 }
 
 /* Translating an ast::BreakStmt node.
  */
 void Translation::visit(ast::BreakStmt *s) { tr->genJump(current_break_label); }
+
+void Translation::visit(ast::ContStmt *s) {
+    tr->genJump(current_continue_label);
+}
 
 /* Translating an ast::CompStmt node.
  */
@@ -166,6 +182,46 @@ void Translation::visit(ast::CompStmt *c) {
     for (auto it = c->stmts->begin(); it != c->stmts->end(); ++it)
         (*it)->accept(this);
 }
+
+void Translation::visit(ast::ForStmt *s) {
+    Label l1 = tr->getNewLabel();
+    Label l2 = tr->getNewLabel();
+    Label l3 = tr->getNewLabel();
+
+    // Visit init statement / expression
+    if (s->initDecl)
+        s->initDecl->accept(this);
+    else if (s->initExpr)
+        s->initExpr->accept(this);
+
+    Label old_break = current_break_label;
+    Label old_continue = current_continue_label;
+    current_break_label = l3;
+    current_continue_label = l2;
+
+    tr->genMarkLabel(l1);
+
+    if (s->cond) {
+        s->cond->accept(this);
+        tr->genJumpOnZero(l3, s->cond->ATTR(val));
+    }
+
+    if (s->body)
+        s->body->accept(this);
+
+    tr->genMarkLabel(l2);
+
+    if (s->update)
+        s->update->accept(this);
+
+    tr->genJump(l1);
+
+    tr->genMarkLabel(l3);
+
+    current_break_label = old_break;
+    current_continue_label = old_continue;
+}
+
 /* Translating an ast::ReturnStmt node.
  */
 void Translation::visit(ast::ReturnStmt *s) {

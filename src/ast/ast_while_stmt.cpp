@@ -20,12 +20,13 @@ using namespace mind::ast;
  *   body    - the loop body
  *   l       - position in the source text
  */
-WhileStmt::WhileStmt(Expr *cond, Statement *body, Location *l) {
+WhileStmt::WhileStmt(Expr *cond, Statement *body, bool hasDo, Location *l) {
 
     setBasicInfo(WHILE_STMT, l);
 
     condition = cond;
     loop_body = body;
+    this->hasDo = hasDo;
 }
 
 /* Visits the current node.
@@ -50,6 +51,28 @@ void WhileStmt::dumpTo(std::ostream &os) {
     decIndent(os);
 }
 
+ForStmt::ForStmt(Expr *init, Expr *cond, Expr *update, Statement *body,
+                 Location *l) {
+    setBasicInfo(FOR_STMT, l);
+
+    this->initExpr = init;
+    this->cond = cond;
+    this->update = update;
+    this->body = body;
+}
+
+ForStmt::ForStmt(VarDecl *init, Expr *cond, Expr *update, Statement *body,
+                 Location *l) {
+    setBasicInfo(FOR_STMT, l);
+
+    this->initDecl = init;
+    this->cond = cond;
+    this->update = update;
+    this->body = body;
+}
+
+void ForStmt::accept(Visitor *v) { v->visit(this); }
+
 /* Creates a new BreakStmt node.
  *
  * PARAMETERS:
@@ -70,6 +93,16 @@ void BreakStmt::accept(Visitor *v) { v->visit(this); }
  *   os      - the output stream
  */
 void BreakStmt::dumpTo(std::ostream &os) {
+    ASTNode::dumpTo(os);
+    newLine(os);
+    decIndent(os);
+}
+
+ContStmt::ContStmt(Location *l) { setBasicInfo(CONT_STMT, l); }
+
+void ContStmt::accept(Visitor *v) { v->visit(this); }
+
+void ContStmt::dumpTo(std::ostream &os) {
     ASTNode::dumpTo(os);
     newLine(os);
     decIndent(os);
