@@ -59,7 +59,7 @@ void scan_end();
    WHILE "while"
    FOR "for"
    BREAK "break"
-   CONTINUE "continue"s
+   CONTINUE "continue"
    EQU "=="
    NEQ "!="
    AND "&&" 
