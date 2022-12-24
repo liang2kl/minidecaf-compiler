@@ -231,6 +231,20 @@ class FOD {
     FuncList *func;
     VarList *decl;
 };
+
+class FuncCallExpr : public Expr {
+  public:
+    FuncCallExpr(std::string name, ExprList *args, Location *l);
+    virtual void accept(Visitor *);
+    virtual void dumpTo(std::ostream &);
+
+  public:
+    std::string name;
+    ExprList *args;
+
+    symb::Function *ATTR(sym);
+};
+
 /* Node representing the integer type.
  *
  * SERIALIZED FORM:

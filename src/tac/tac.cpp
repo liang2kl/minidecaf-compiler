@@ -583,6 +583,32 @@ Tac *Tac::Mark(Label label) {
     return t;
 }
 
+Tac *Tac::Call(Temp dest, Label func) {
+    Tac *t = allocateNewTac(Tac::CALL);
+    t->op0.var = dest;
+    t->op1.label = func;
+    func->target = true;
+    func->where = t;
+
+    return t;
+}
+
+Tac *Tac::Param(Temp param, int index) {
+    Tac *t = allocateNewTac(Tac::PARAM);
+    t->op0.var = param;
+    t->op1.ival = index;
+
+    return t;
+}
+
+Tac *Tac::GetParam(Temp dest, int index) {
+    Tac *t = allocateNewTac(Tac::GET_PARAM);
+    t->op0.var = dest;
+    t->op1.ival = index;
+
+    return t;
+}
+
 /* Outputs a temporary variable.
  *
  * PARAMETERS:
@@ -721,7 +747,7 @@ void Tac::dump(std::ostream &os) {
         break;
 
     case JUMP:
-        os << "    jump   " << op0.label;
+        os << "    jump " << op0.label;
         break;
 
     case JZERO:
@@ -729,7 +755,7 @@ void Tac::dump(std::ostream &os) {
         break;
 
     case PUSH:
-        os << "    push   " << op0.var;
+        os << "    push " << op0.var;
         break;
 
     case POP:
@@ -745,6 +771,19 @@ void Tac::dump(std::ostream &os) {
 
     case LOAD_IMM4:
         os << "    " << op0.var << " <- " << op1.ival;
+        break;
+
+    case CALL:
+        os << "    " << op0.var << " <- call " << op1.label;
+        break;
+
+    case PARAM:
+        os << "    param " << op0.var << " " << op1.ival;
+        break;
+
+    case GET_PARAM:
+        os << "    " << op0.var << " <- get_param "
+           << "#" + std::to_string(op1.ival);
         break;
 
     default:

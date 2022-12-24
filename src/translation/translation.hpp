@@ -53,6 +53,7 @@ class Translation : public ast::Visitor {
     virtual void visit(ast::BitNotExpr *);
     virtual void visit(ast::NotExpr *);
     virtual void visit(ast::IfExpr *);
+    virtual void visit(ast::FuncCallExpr *);
 
     virtual ~Translation() {}
 

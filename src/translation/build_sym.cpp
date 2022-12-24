@@ -91,10 +91,17 @@ void SemPass1::visit(ast::FuncDefn *fdef) {
     // 2,3). if DeclConflictError occurs, we don't put the symbol into the
     // symbol table
     Symbol *sym = scopes->lookup(fdef->name, fdef->getLocation(), false);
-    if (NULL != sym)
-        issue(fdef->getLocation(), new DeclConflictError(fdef->name, sym));
-    else
+    if (sym == NULL) {
+        f->mark = fdef->forward_decl;
         scopes->declare(f);
+    } else {
+        if (fdef->forward_decl)
+            return;
+        if (sym->mark == 1) // previously forward declaration
+            sym->mark = 0;
+        else // redefinition
+            issue(fdef->getLocation(), new DeclConflictError(fdef->name, sym));
+    }
 
     // opens function scope
     scopes->open(f->getAssociatedScope());

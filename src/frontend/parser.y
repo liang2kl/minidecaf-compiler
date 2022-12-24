@@ -91,7 +91,7 @@ void scan_end();
 %token <std::string> IDENTIFIER "identifier"
 %token<int> ICONST "iconst"
 %nterm<mind::ast::StmtList*> StmtList
-%nterm<mind::ast::VarList* > FormalList 
+%nterm<mind::ast::VarList* > ParamList CommaSepParamList
 %nterm<mind::ast::Program* > Program FoDList
 %nterm<mind::ast::FuncDefn* > FuncDefn
 %nterm<mind::ast::Type*> Type
@@ -99,6 +99,7 @@ void scan_end();
 %nterm<mind::ast::VarDecl*> DeclStmt
 %nterm<mind::ast::Expr*> Expr
 %nterm<mind::ast::VarRef*> VarRef
+%nterm<mind::ast::ExprList*> ExprList CommaSepExprList
 /*   SUBSECTION 2.2: associativeness & precedences */
 %right ASSIGN
 %right QUESTION
@@ -133,14 +134,22 @@ FoDList :
                   $$ = $1; }
                 }
 
-FuncDefn : Type IDENTIFIER LPAREN FormalList RPAREN LBRACE StmtList RBRACE {
+FuncDefn : Type IDENTIFIER LPAREN ParamList RPAREN LBRACE StmtList RBRACE {
               $$ = new ast::FuncDefn($2,$1,$4,$7,POS(@1));
           } |
-          Type IDENTIFIER LPAREN FormalList RPAREN SEMICOLON{
+          Type IDENTIFIER LPAREN ParamList RPAREN SEMICOLON{
               $$ = new ast::FuncDefn($2,$1,$4,new ast::EmptyStmt(POS(@6)),POS(@1));
           }
-FormalList :  /* EMPTY */
-            {$$ = new ast::VarList();} 
+ParamList :  /* EMPTY */ { $$ = new ast::VarList(); }
+           | CommaSepParamList { $$ = $1; }
+           ;
+
+CommaSepParamList : Type IDENTIFIER
+                { $$ = new ast::VarList(); $$->append(new ast::VarDecl($2, $1, POS(@1))); }
+             | CommaSepParamList COMMA Type IDENTIFIER
+                { $1->append(new ast::VarDecl($4, $3, POS(@3))); $$ = $1; }
+             ;
+           
 
 Type        : INT
                 { $$ = new ast::IntType(POS(@1)); }
@@ -265,7 +274,21 @@ Expr        : ICONST
             /* Ternary */
             | Expr QUESTION Expr COLON Expr %prec QUESTION
                 { $$ = new ast::IfExpr($1,$3,$5,POS(@2)); }
+            /* Function call */
+            | IDENTIFIER LPAREN ExprList RPAREN
+                { $$ = new ast::FuncCallExpr($1, $3, POS(@1)); }
             ;
+
+ExprList    : /* EMPTY */
+                { $$ = new ast::ExprList(); }
+            | CommaSepExprList
+                { $$ = $1; }
+            ;
+CommaSepExprList : Expr
+                    { $$ = new ast::ExprList(); $$->append($1); }
+                 | CommaSepExprList COMMA Expr
+                    { $$ = $1; $$->append($3); }
+                 ;
 %%
 
 /* SECTION IV: customized section */

@@ -51,6 +51,7 @@ class SemPass2 : public ast::Visitor {
     virtual void visit(ast::LvalueExpr *);
     virtual void visit(ast::IfExpr *);
     virtual void visit(ast::VarRef *);
+    virtual void visit(ast::FuncCallExpr *);
     // Visiting statements
     virtual void visit(ast::VarDecl *);
     virtual void visit(ast::CompStmt *);
@@ -283,6 +284,44 @@ void SemPass2::visit(ast::IfExpr *e) {
 void SemPass2::visit(ast::LvalueExpr *e) {
     e->lvalue->accept(this);
     e->ATTR(type) = e->lvalue->ATTR(type);
+}
+
+void SemPass2::visit(ast::FuncCallExpr *e) {
+    // Find the symbol in the symbol table.
+    Symbol *s = scopes->lookup(e->name, e->getLocation());
+    Function *func;
+    size_t numArgs = 0;
+
+    if (s == nullptr) {
+        issue(e->getLocation(), new SymbolNotFoundError(e->name));
+        goto issue_error_type;
+    } else if (!s->isFunction()) {
+        issue(e->getLocation(), new NotMethodError(s));
+        goto issue_error_type;
+    }
+
+    func = dynamic_cast<Function *>(s);
+    mind_assert(func != nullptr);
+
+    for (auto arg = e->args->begin(); arg != e->args->end(); ++arg) {
+        (*arg)->accept(this);
+        ++numArgs;
+    }
+
+    // Check the number of arguments.
+    if (func->getType()->numOfParameters() != numArgs) {
+        issue(e->getLocation(), new BadArgCountError(func));
+        goto issue_error_type;
+    }
+
+    e->ATTR(type) = func->getType()->getResultType();
+    e->ATTR(sym) = func;
+    return;
+
+issue_error_type:
+    e->ATTR(type) = BaseType::Error;
+    e->ATTR(sym) = NULL;
+    return;
 }
 
 /* Visits an ast::VarRef node.

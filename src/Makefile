@@ -41,7 +41,7 @@ AST     = ast/ast.o ast/ast_add_expr.o ast/ast_and_expr.o  ast/ast_or_expr.o\
           ast/ast_lvalue_expr.o ast/ast_mod_expr.o \
           ast/ast_mul_expr.o ast/ast_neg_expr.o \
           ast/ast_not_expr.o \
-          ast/ast_program.o ast/ast_func_defn.o \
+          ast/ast_program.o ast/ast_func_defn.o ast/ast_func_call_expr.o \
           ast/ast_return_stmt.o ast/ast_sub_expr.o \
           ast/ast_var_decl.o ast/ast_var_ref.o  ast/ast_while_stmt.o ast/ast_comp_stmt.o 
 TYPE    = type/type.o type/base_type.o type/array_type.o type/func_type.o
@@ -121,6 +121,8 @@ ast/ast_expr_stmt.o: config.hpp 3rdparty/boehmgc.hpp define.hpp | $(SCANNER) $(P
 ast/ast_expr_stmt.o: 3rdparty/list.hpp error.hpp ast/ast.hpp ast/visitor.hpp | $(SCANNER) $(PARSER)
 ast/ast_func_defn.o: config.hpp 3rdparty/boehmgc.hpp define.hpp | $(SCANNER) $(PARSER)
 ast/ast_func_defn.o: 3rdparty/list.hpp error.hpp ast/ast.hpp ast/visitor.hpp | $(SCANNER) $(PARSER)
+ast/ast_func_call_expr.o: config.hpp 3rdparty/boehmgc.hpp define.hpp | $(SCANNER) $(PARSER)
+ast/ast_func_call_expr.o: 3rdparty/list.hpp error.hpp ast/ast.hpp ast/visitor.hpp | $(SCANNER) $(PARSER)
 ast/ast_if_stmt.o: config.hpp 3rdparty/boehmgc.hpp define.hpp | $(SCANNER) $(PARSER)
 ast/ast_if_stmt.o: 3rdparty/list.hpp error.hpp ast/ast.hpp ast/visitor.hpp | $(SCANNER) $(PARSER)
 ast/ast_int_const.o: config.hpp 3rdparty/boehmgc.hpp define.hpp | $(SCANNER) $(PARSER)

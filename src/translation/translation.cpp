@@ -59,6 +59,10 @@ void Translation::visit(ast::FuncDefn *f) {
     // attaching function entry label
     fun->attachEntryLabel(tr->getNewEntryLabel(fun));
 
+    if (f->forward_decl) {
+        return;
+    }
+
     // arguments
     int order = 0;
     for (auto it = f->formals->begin(); it != f->formals->end(); ++it) {
@@ -74,7 +78,10 @@ void Translation::visit(ast::FuncDefn *f) {
     tr->startFunc(fun);
 
     // You may process params here, i.e use reg or stack to pass parameters
-
+    for (auto it = f->formals->begin(); it != f->formals->end(); ++it) {
+        auto v = (*it)->ATTR(sym);
+        tr->genGetParam(v->getTemp(), v->getOrder());
+    }
 
     // translates statement by statement
     for (auto it = f->stmts->begin(); it != f->stmts->end(); ++it)
@@ -426,6 +433,29 @@ void Translation::visit(ast::VarDecl *decl) {
             tr->genAssign(decl->ATTR(sym)->getTemp(), decl->init->ATTR(val));
         }
     }
+}
+
+void Translation::visit(ast::FuncCallExpr *e) {
+    // We should visit all the arguments first, and then generate the PARAM tac.
+    for (auto iter = e->args->begin(); iter != e->args->end(); iter++) {
+        (*iter)->accept(this);
+    }
+    // Push the args in the reversed order.
+    int total = e->args->length() - 1;
+    auto iter = e->args->end();
+    if (iter != e->args->begin()) {
+        while (true) {
+            iter--;
+            tr->genParam((*iter)->ATTR(val), total);
+            total--;
+            if (iter == e->args->begin()) {
+                break;
+            }
+        }
+    }
+
+    Temp res = tr->genCall(e->ATTR(sym)->getEntryLabel());
+    e->ATTR(val) = res;
 }
 
 /* Translates an entire AST into a Piece list.

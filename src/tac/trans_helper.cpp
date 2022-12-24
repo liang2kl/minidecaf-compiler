@@ -488,3 +488,19 @@ void TransHelper::genMemo(const char *comment) { chainUp(Tac::Memo(comment)); }
  *   the Piece list (representing as a single linked list)
  */
 Piece *TransHelper::getPiece(void) { return head.next; }
+
+Temp TransHelper::genCall(Label func) {
+    Temp dest = getNewTempI4();
+    chainUp(Tac::Call(dest, func));
+    return dest;
+}
+
+void TransHelper::genParam(Temp param, int index) {
+    chainUp(Tac::Param(param, index));
+}
+
+void TransHelper::genGetParam(Temp dest, int index) {
+    chainUp(Tac::GetParam(dest, index));
+}
+
+// Temp TransHelper
