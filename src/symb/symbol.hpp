@@ -78,6 +78,8 @@ class Variable : public Symbol {
     // init value for global variable
     int global_init;
 
+    tac::Label label;
+
   public:
     // Constructor
     Variable(std::string n, type::Type *t, Location *l);
@@ -101,6 +103,9 @@ class Variable : public Symbol {
     void attachTemp(tac::Temp);
     // Gets the attached register object
     tac::Temp getTemp(void);
+
+    void attachLabel(tac::Label);
+    tac::Label getLabel(void);
 };
 
 /* Function Definition.

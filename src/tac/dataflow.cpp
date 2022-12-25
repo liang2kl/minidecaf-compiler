@@ -46,6 +46,7 @@ void BasicBlock::computeDefAndLiveUse(void) {
         case Tac::NEG:
         case Tac::LNOT:
         case Tac::BNOT:
+        case Tac::LOAD:
             updateLU(t->op1.var);
             updateDEF(t->op0.var);
             break;
@@ -72,6 +73,7 @@ void BasicBlock::computeDefAndLiveUse(void) {
         case Tac::LOAD_IMM4:
         case Tac::CALL:
         case Tac::GET_PARAM:
+        case Tac::LOAD_SYM:
             updateDEF(t->op0.var);
             break;
 
@@ -80,6 +82,10 @@ void BasicBlock::computeDefAndLiveUse(void) {
             updateLU(t->op0.var);
             break;
 
+        case Tac::STORE:
+            updateLU(t->op0.var);
+            updateLU(t->op1.var);
+            break;
         default:
             mind_assert(false); // MARK, MEMO, JUMP, JZERO and RETURN will not
                                 // appear inside
@@ -196,6 +202,7 @@ void BasicBlock::analyzeLiveness(void) {
         case Tac::NEG:
         case Tac::LNOT:
         case Tac::BNOT:
+        case Tac::LOAD:
             if (NULL != t_next->op0.var)
                 t->LiveOut->remove(t_next->op0.var);
             t->LiveOut->add(t_next->op1.var);
@@ -224,6 +231,7 @@ void BasicBlock::analyzeLiveness(void) {
         case Tac::LOAD_IMM4:
         case Tac::CALL:
         case Tac::GET_PARAM:
+        case Tac::LOAD_SYM:
             if (NULL != t_next->op0.var)
                 t->LiveOut->remove(t_next->op0.var);
             break;
@@ -233,6 +241,10 @@ void BasicBlock::analyzeLiveness(void) {
             t->LiveOut->add(t_next->op0.var);
             break;
 
+        case Tac::STORE:
+            t->LiveOut->add(t_next->op0.var);
+            t->LiveOut->add(t_next->op1.var);
+            break;
         default:
             mind_assert(false); // MARK, MEMO, JUMP, JZERO and RETURN will not
                                 // appear inside

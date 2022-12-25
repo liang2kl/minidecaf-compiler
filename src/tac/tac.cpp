@@ -609,6 +609,41 @@ Tac *Tac::GetParam(Temp dest, int index) {
     return t;
 }
 
+Tac *Tac::DeclGlobVar(Label label, int size, int *defaultValue) {
+    Tac *t = allocateNewTac(Tac::DECL_GLOB_VAR);
+    t->op0.label = label;
+    t->op1.ival = size;
+    t->op1.memo = (char *)defaultValue;
+
+    return t;
+}
+
+Tac *Tac::LoadSym(Temp dest, Label label) {
+    Tac *t = allocateNewTac(Tac::LOAD_SYM);
+    t->op0.var = dest;
+    t->op1.label = label;
+
+    return t;
+}
+
+Tac *Tac::Load(Temp dest, Temp src, int offset) {
+    Tac *t = allocateNewTac(Tac::LOAD);
+    t->op0.var = dest;
+    t->op1.var = src;
+    t->op1.ival = offset;
+
+    return t;
+}
+
+Tac *Tac::Store(Temp dest, int offset, Temp src) {
+    Tac *t = allocateNewTac(Tac::STORE);
+    t->op0.var = dest;
+    t->op0.ival = offset;
+    t->op1.var = src;
+
+    return t;
+}
+
 /* Outputs a temporary variable.
  *
  * PARAMETERS:
@@ -786,6 +821,32 @@ void Tac::dump(std::ostream &os) {
            << "#" + std::to_string(op1.ival);
         break;
 
+    case DECL_GLOB_VAR:
+        os << "    decl_glob_var " << op0.label << "[" << op1.ival << "]";
+        if (op1.memo != NULL) {
+            os << " {";
+            int *defaults = (int *)op1.memo;
+            for (int i = 0; i < op1.ival; i++) {
+                os << (i == 0 ? "" : " ") << defaults[i]
+                   << (i == op1.ival - 1 ? "" : ",");
+            }
+            os << "}";
+        }
+        break;
+
+    case LOAD_SYM:
+        os << "    " << op0.var << " <- load_sym " << op1.label;
+        break;
+
+    case LOAD:
+        os << "    " << op0.var << " <- load *(" << op1.var << " + " << op1.ival
+           << ")";
+        break;
+
+    case STORE:
+        os << "    store *(" << op0.var << " + " << op0.ival << ") <- "
+           << op1.var;
+        break;
     default:
         mind_assert(false); // unreachable
         break;
@@ -801,6 +862,9 @@ void Piece::dump(std::ostream &os) {
     for (Piece *p = this; p != NULL; p = p->next) {
         if (FUNCTY == p->kind)
             os << p->as.functy << std::endl;
+        else if (VAR_DECL == p->kind)
+            p->as.varDecl->dump(os);
+        os << std::endl;
     }
 }
 

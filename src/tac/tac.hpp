@@ -97,6 +97,10 @@ struct Tac {
         CALL,
         PARAM,
         GET_PARAM,
+        DECL_GLOB_VAR,
+        LOAD_SYM,
+        LOAD,
+        STORE,
     } Kind;
 
     // Operand type
@@ -151,6 +155,10 @@ struct Tac {
     static Tac *Call(Temp dest, Label func);
     static Tac *Param(Temp src, int index);
     static Tac *GetParam(Temp dest, int index);
+    static Tac *DeclGlobVar(Label label, int size, int *defaultValue);
+    static Tac *LoadSym(Temp dest, Label label);
+    static Tac *Load(Temp dest, Temp src, int offset);
+    static Tac *Store(Temp dest, int offset, Temp src);
 
     // dumps a single tac node to some output stream
     void dump(std::ostream &);
@@ -170,11 +178,13 @@ struct Piece {
     // kind of this Piece node
     enum {
         FUNCTY,
+        VAR_DECL,
     } kind;
 
     // data of this Piece node
     union {
         Functy functy;
+        Tac *varDecl;
     } as;
 
     // next Piece node

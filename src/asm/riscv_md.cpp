@@ -124,7 +124,9 @@ void RiscvDesc::emitPieces(scope::GlobalScope *gscope, Piece *ps,
         case Piece::FUNCTY:
             emitFuncty(ps->as.functy);
             break;
-
+        case Piece::VAR_DECL:
+            emitDeclGlobVarTac(ps->as.varDecl);
+            break;
         default:
             mind_assert(false); // unreachable
             break;
@@ -312,6 +314,18 @@ void RiscvDesc::emitTac(Tac *t) {
 
     case Tac::CALL:
         emitCallTac(t);
+        break;
+
+    case Tac::LOAD_SYM:
+        emitLoadSymTac(t);
+        break;
+
+    case Tac::LOAD:
+        emitLoadTac(t);
+        break;
+
+    case Tac::STORE:
+        emitStoreTac(t);
         break;
 
     default:
@@ -637,6 +651,10 @@ void RiscvDesc::emitInstr(RiscvInstr *i) {
             << "_" + i->l;
         break;
 
+    case RiscvInstr::LA:
+        oss << "la" << i->r0->name << ", " << i->l;
+        break;
+
     default:
         mind_assert(false); // other instructions not supported
     }
@@ -685,6 +703,8 @@ void RiscvDesc::emitCallTac(Tac *t) {
     // Unprotect the arg regs.
     for (int i = 0; i < 8; i++)
         _reg[RiscvReg::A0 + i]->general = true;
+    if (!t->LiveOut->contains(t->op0.var))
+        return;
     spillDirtyRegs(t->LiveOut);
     addInstr(RiscvInstr::JAL, NULL, NULL, NULL, 0, t->op1.label->str_form,
              EMPTY_STR);
@@ -711,10 +731,60 @@ void RiscvDesc::emitGetParamTac(Tac *t) {
         getParamReg(t, t->op1.ival);
     } else {
         int regIndex = getRegForWrite(t->op0.var, 0, 0, t->LiveOut);
+        mind_assert(regIndex != RiscvReg::A0);
         int frameSize = _frame->getStackFrameSize();
         addInstr(RiscvInstr::LW, _reg[regIndex], _reg[RiscvReg::SP], NULL,
                  (t->op1.ival - 8) * 4 - frameSize, EMPTY_STR, EMPTY_STR);
     }
+}
+
+void RiscvDesc::emitDeclGlobVarTac(tac::Tac *t) {
+    std::ostream &os(*_result);
+
+    if (t->op1.memo == NULL) {
+        // Without default value, put to bss.
+        emit(EMPTY_STR, ".bss", NULL);
+        emit(EMPTY_STR,
+             (std::string(".globl ") + t->op0.label->str_form).c_str(), NULL);
+        os << t->op0.label->str_form << ":" << std::endl;
+        emit(EMPTY_STR, (".space " + std::to_string(t->op1.ival)).c_str(),
+             NULL);
+    } else {
+        // With default value, put to data.
+        emit(EMPTY_STR, ".data", NULL);
+        emit(EMPTY_STR,
+             (std::string(".globl ") + t->op0.label->str_form).c_str(), NULL);
+        os << t->op0.label->str_form << ":" << std::endl;
+        int *defaults = (int *)t->op1.memo;
+        for (int i = 0; i < t->op1.ival; i++) {
+            emit(EMPTY_STR, (".word " + std::to_string(defaults[i])).c_str(),
+                 NULL);
+        }
+    }
+}
+
+void RiscvDesc::emitLoadSymTac(tac::Tac *t) {
+    if (!t->LiveOut->contains(t->op0.var))
+        return;
+    int regIndex = getRegForWrite(t->op0.var, 0, 0, t->LiveOut);
+    addInstr(RiscvInstr::LA, _reg[regIndex], NULL, NULL, 0,
+             t->op1.label->str_form, EMPTY_STR);
+}
+
+void RiscvDesc::emitLoadTac(tac::Tac *t) {
+    if (!t->LiveOut->contains(t->op0.var))
+        return;
+    int baseIndex = getRegForRead(t->op1.var, 0, t->LiveOut);
+    int regIndex = getRegForWrite(t->op0.var, baseIndex, 0, t->LiveOut);
+    addInstr(RiscvInstr::LW, _reg[regIndex], _reg[baseIndex], NULL, t->op1.ival,
+             EMPTY_STR, EMPTY_STR);
+}
+
+void RiscvDesc::emitStoreTac(tac::Tac *t) {
+    int regIndex = getRegForRead(t->op1.var, 0, t->LiveOut);
+    int baseIndex = getRegForRead(t->op0.var, regIndex, t->LiveOut);
+    addInstr(RiscvInstr::SW, _reg[regIndex], _reg[baseIndex], NULL, t->op0.ival,
+             EMPTY_STR, EMPTY_STR);
 }
 
 /* Appends an instruction line to "_tail". (internal helper function)

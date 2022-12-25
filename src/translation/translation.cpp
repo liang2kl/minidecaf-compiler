@@ -106,8 +106,9 @@ void Translation::visit(ast::AssignExpr *s) {
             ref->accept(this);
             s->e->accept(this);
             if (ref->ATTR(sym)->isGlobalVar()) {
-                // TODO: Implementation
-                mind_assert(false);
+                // TODO: Array
+                Temp symAddr = tr->genLoadSym(ref->ATTR(sym)->getLabel());
+                tr->genStore(symAddr, 0, s->e->ATTR(val));
             } else {
                 tr->genAssign(ref->ATTR(sym)->getTemp(), s->e->ATTR(val));
                 s->ATTR(val) = ref->ATTR(sym)->getTemp();
@@ -391,8 +392,9 @@ void Translation::visit(ast::LvalueExpr *e) {
         ref->accept(this);
 
         if (ref->ATTR(sym)->isGlobalVar()) {
-            // TODO: Implementation
-            mind_assert(false);
+                // TODO: Array
+                Temp addr = tr->genLoadSym(ref->ATTR(sym)->getLabel());
+                e->ATTR(val) = tr->genLoad(addr, 0);
         } else {
             e->ATTR(val) = ref->ATTR(sym)->getTemp();
         }
@@ -424,8 +426,23 @@ void Translation::visit(ast::VarRef *ref) {
  */
 void Translation::visit(ast::VarDecl *decl) {
     if (decl->ATTR(sym)->isGlobalVar()) {
-        // TODO: implementation
-        mind_assert(false);
+        // Create label for the global variable
+        decl->ATTR(sym)->attachLabel(tr->getNewGlobVarLabel(decl->ATTR(sym)));
+
+        int *defaultValues = NULL;
+        if (decl->init != NULL) {
+            // TODO: Array
+            assert(decl->init->getKind() == ast::ASTNode::INT_CONST);
+            ast::IntConst *intConst = dynamic_cast<ast::IntConst *>(decl->init);
+            mind_assert(intConst != NULL);
+            // Do not translate the node here!
+
+            defaultValues = new int[1];
+            defaultValues[0] = intConst->value;
+        }
+
+        tr->genDeclGlobVar(decl->ATTR(sym)->getLabel(), 1, defaultValues);
+
     } else {
         decl->ATTR(sym)->attachTemp(tr->getNewTempI4());
         if (decl->init != NULL) {

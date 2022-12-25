@@ -205,6 +205,11 @@ class ZeroLengthedArrayError : public MindError {
     virtual void printTo(std::ostream &);
 };
 
+class NotConstInitError : public MindError {
+  public:
+    NotConstInitError();
+    virtual void printTo(std::ostream &);
+};
 } // namespace err
 } // namespace mind
 

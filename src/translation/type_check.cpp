@@ -364,8 +364,13 @@ issue_error_type:
  *   decl     - the ast::VarDecl node
  */
 void SemPass2::visit(ast::VarDecl *decl) {
-    if (decl->init)
+    if (decl->init) {
         decl->init->accept(this);
+        if (decl->ATTR(sym)->isGlobalVar() &&
+            decl->init->getKind() != ast::ASTNode::INT_CONST) {
+            issue(decl->getLocation(), new NotConstInitError());
+        }
+    }
 }
 
 /* Visits an ast::AssignStmt node.

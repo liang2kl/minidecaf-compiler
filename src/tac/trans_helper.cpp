@@ -116,6 +116,17 @@ Label TransHelper::getNewEntryLabel(Function *fn) {
     return l;
 }
 
+Label TransHelper::getNewGlobVarLabel(Variable *var) {
+    mind_assert(NULL != var);
+
+    Label l = new LabelObject();
+    l->id = label_count++;
+    l->str_form = var->getName();
+    l->target = false; // such label is referenced by virtual tables
+
+    return l;
+}
+
 /* Creates a Memo tac about the function parameters.
  *
  * PARAMETERS:
@@ -481,6 +492,28 @@ void TransHelper::genMarkLabel(Label label) { chainUp(Tac::Mark(label)); }
  * "This is comment") NOTE: memorandum can serve as comment in TAC sequence
  */
 void TransHelper::genMemo(const char *comment) { chainUp(Tac::Memo(comment)); }
+
+void TransHelper::genDeclGlobVar(Label label, int size, int *defaultValue) {
+    ptail = ptail->next = new Piece();
+    ptail->kind = Piece::VAR_DECL;
+    ptail->as.varDecl = Tac::DeclGlobVar(label, size, defaultValue);
+}
+
+Temp TransHelper::genLoadSym(Label label) {
+    Temp dest = getNewTempI4();
+    chainUp(Tac::LoadSym(dest, label));
+    return dest;
+}
+
+Temp TransHelper::genLoad(Temp src, int offset) {
+    Temp dest = getNewTempI4();
+    chainUp(Tac::Load(dest, src, offset));
+    return dest;
+}
+
+void TransHelper::genStore(Temp dest, int offset, Temp src) {
+    chainUp(Tac::Store(dest, offset, src));
+}
 
 /* Retrieves the entire Piece list.
  *

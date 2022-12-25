@@ -114,3 +114,11 @@ void Variable::attachTemp(tac::Temp v) {
  *   the attached register object
  */
 Temp Variable::getTemp(void) { return attached; }
+
+void Variable::attachLabel(tac::Label l) {
+    mind_assert(NULL != l && NULL == label);
+
+    label = l;
+}
+
+tac::Label Variable::getLabel(void) { return label; }

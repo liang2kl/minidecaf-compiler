@@ -126,13 +126,16 @@ Program     : FoDList
                 { /* we don't write $$ = XXX here. */
 				  setParseTree($1); }
             ;
-FoDList :   
-            FuncDefn 
-                {$$ = new ast::Program($1,POS(@1)); } |
-            FoDList FuncDefn{
-                 {$1->func_and_globals->append($2);
+FoDList :   DeclStmt
+                { $$ = new ast::Program($1,POS(@1)); }
+            | FuncDefn
+                { $$ = new ast::Program($1,POS(@1)); }
+            | FoDList FuncDefn
+                { $1->func_and_globals->append($2);
                   $$ = $1; }
-                }
+            | FoDList DeclStmt
+                { $1->func_and_globals->append($2);
+                  $$ = $1; }
 
 FuncDefn : Type IDENTIFIER LPAREN ParamList RPAREN LBRACE StmtList RBRACE {
               $$ = new ast::FuncDefn($2,$1,$4,$7,POS(@1));

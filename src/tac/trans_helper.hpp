@@ -34,6 +34,8 @@ class TransHelper {
     Label getNewLabel(void);
     // allocates a new entry Label object for function
     Label getNewEntryLabel(symb::Function *);
+    // allocates a label for global variable
+    Label getNewGlobVarLabel(symb::Variable *);
     // starts to translate a function
     void startFunc(symb::Function *);
     // ends translating a function
@@ -73,6 +75,11 @@ class TransHelper {
     Temp genLoadImm4(int);
     void genMarkLabel(Label);
     void genMemo(const char *);
+    // Global var
+    void genDeclGlobVar(Label label, int size, int *defaultValue);
+    Temp genLoadSym(Label);
+    Temp genLoad(Temp src, int offset);
+    void genStore(Temp dest, int offset, Temp src);
 
     // gets the entire Piece list
     Piece *getPiece();

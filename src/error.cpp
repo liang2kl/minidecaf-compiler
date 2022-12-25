@@ -404,3 +404,9 @@ ZeroLengthedArrayError::ZeroLengthedArrayError() {}
 void ZeroLengthedArrayError::printTo(std::ostream &os) {
     os << "Zero-lengthed array is not allowed";
 }
+
+NotConstInitError::NotConstInitError() {}
+
+void NotConstInitError::printTo(std::ostream &os) {
+    os << "Only constant expressions are allowed in initializers";
+}
