@@ -1,0 +1,430 @@
+\documentclass[a4paper]{article}
+\usepackage{listings}
+\usepackage{ctex}
+\usepackage[svgnames]{xcolor}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{parskip}
+
+\setlength{\parskip}{6pt}
+
+\author{梁业升 2019010547（计03）}
+
+\lstdefinelanguage{diff} {
+    basicstyle=\ttfamily\small,
+    morecomment=[f][\color{diffstart}]{@@},
+    morecomment=[f][\color{diffincl}]{+\ },
+    morecomment=[f][\color{diffrem}]{-\ },
+  }
+
+\begin{document}
+
+% GitHub styles
+\definecolor{keyword}{HTML}{CF222E}
+\definecolor{comment}{HTML}{6E7781}
+\definecolor{string}{HTML}{0A3069}
+\definecolor{diffstart}{named}{Grey}
+\definecolor{diffincl}{named}{Green}
+\definecolor{diffrem}{named}{OrangeRed}
+
+\lstset{
+    commentstyle=\color{comment},
+    keywordstyle=\color{keyword},
+    stringstyle=\color{string},
+    basicstyle=\ttfamily\small,
+    breakatwhitespace=false,
+    breaklines=true,
+    captionpos=b,
+    keepspaces=true,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+}
+
+\title{MiniDecaf Stage 4 Report}
+
+\maketitle
+
+\section{实验内容}
+
+\subsection{Step 9：函数}
+
+\subsubsection{词法语法分析}
+
+主要增加对于形参和实参列表的解析：
+
+\begin{lstlisting}[]
+ParamList :  /* EMPTY */ { $$ = new ast::VarList(); }
+          | CommaSepParamList { $$ = $1; }
+          ;
+
+CommaSepParamList :
+Type IDENTIFIER
+    { $$ = new ast::VarList(); $$->append(new ast::VarDecl($2, $1, POS(@1))); }
+| CommaSepParamList COMMA Type IDENTIFIER
+    { $1->append(new ast::VarDecl($4, $3, POS(@3))); $$ = $1; }
+;
+\end{lstlisting}
+
+\begin{lstlisting}[]
+ExprList    : /* EMPTY */ { $$ = new ast::ExprList(); }
+            | CommaSepExprList { $$ = $1; }
+            ;
+CommaSepExprList :
+Expr
+    { $$ = new ast::ExprList(); $$->append($1); }
+| CommaSepExprList COMMA Expr
+    { $$ = $1; $$->append($3); }
+;
+\end{lstlisting}
+
+另外，增加 \texttt{FuncCallExpr} 节点：
+
+\begin{lstlisting}[language=c++]
+class FuncCallExpr : public Expr {
+   public:
+     FuncCallExpr(std::string name, ExprList *args, Location *l);
+     virtual void accept(Visitor *);
+     virtual void dumpTo(std::ostream &);
+
+   public:
+     std::string name;
+     ExprList *args;
+
+     symb::Function *ATTR(sym);
+ };
+\end{lstlisting}
+
+在语法分析中：
+
+\begin{lstlisting}[language=diff]
+Expr:
+     ...
+     | IDENTIFIER LPAREN ExprList RPAREN
+         { $$ = new ast::FuncCallExpr($1, $3, POS(@1)); }
+     ;
+\end{lstlisting}
+
+\subsubsection{符号表构建}
+
+在第一个 Pass，对于 \texttt{FuncDefn} 节点，需要修改原框架中对于符号表已存在的处理。具体来说，当函数符号为前向声明时，不认为是冲突定义。在这里我们用 \texttt{Symbol} 的 \texttt{mark} 成员来保存此信息。
+
+\begin{lstlisting}[language=c++]
+void SemPass1::visit(ast::FuncDefn *fdef) {
+    ...
+    Symbol *sym = scopes->lookup(fdef->name, fdef->getLocation(), false);
+    if (sym == NULL) {
+        f->mark = fdef->forward_decl;
+        scopes->declare(f);
+    } else {
+        if (fdef->forward_decl)
+            return;
+        if (sym->mark == 1) // previously forward declaration
+            sym->mark = 0;
+        else // redefinition
+            issue(fdef->getLocation(), new DeclConflictError(fdef->name, sym));
+    }
+    ...
+}
+\end{lstlisting}
+
+\subsubsection{类型检查}
+
+针对新增的表达式 \texttt{FuncCallExpr} 增加类型检查，主要处理符号未定义和参数个数不一致的情况（目前仅支持 \texttt{int} 类型，因此暂时不需要检查参数类型是否正确：
+
+\begin{lstlisting}[language=c++]
+void SemPass2::visit(ast::FuncCallExpr *e) {
+    // Find the symbol in the symbol table.
+    Symbol *s = scopes->lookup(e->name, e->getLocation());
+    Function *func;
+    size_t numArgs = 0;
+
+    if (s == nullptr) {
+        issue(e->getLocation(), new SymbolNotFoundError(e->name));
+        goto issue_error_type;
+    } else if (!s->isFunction()) {
+        issue(e->getLocation(), new NotMethodError(s));
+        goto issue_error_type;
+    }
+
+    func = dynamic_cast<Function *>(s);
+    mind_assert(func != nullptr);
+
+    for (auto arg = e->args->begin(); arg != e->args->end(); ++arg) {
+        (*arg)->accept(this);
+        ++numArgs;
+    }
+
+    // Check the number of arguments.
+    if (func->getType()->numOfParameters() != numArgs) {
+        issue(e->getLocation(), new BadArgCountError(func));
+        goto issue_error_type;
+    }
+
+    e->ATTR(type) = func->getType()->getResultType();
+    e->ATTR(sym) = func;
+    return;
+
+issue_error_type:
+    e->ATTR(type) = BaseType::Error;
+    e->ATTR(sym) = NULL;
+    return;
+}
+\end{lstlisting}
+
+\subsubsection{翻译为中间代码}
+
+增加三个 TAC 类型：
+
+\begin{itemize}
+    \item \texttt{CALL label}：调用 \texttt{label} 函数
+    \item \texttt{PARAM src, x}：从 \texttt{src} 传入第 \texttt{x} 个参数
+    \item \texttt{GET\_PARAM dest, x}：取出第 \texttt{x} 个参数并赋值给 \texttt{dest}
+\end{itemize}
+
+对应的翻译代码如下：
+
+翻译 \texttt{FuncCallExpr}，注意应先生成函数参数对应的 TAC，再生成 \texttt{PARAM}：
+
+\begin{lstlisting}[language=c++]
+void Translation::visit(ast::FuncCallExpr *e) {
+    // We should visit all the arguments first, and then generate the PARAM tac.
+    for (auto iter = e->args->begin(); iter != e->args->end(); iter++) {
+        (*iter)->accept(this);
+    }
+    // Push the args in the reversed order.
+    int total = e->args->length() - 1;
+    auto iter = e->args->end();
+    if (iter != e->args->begin()) {
+        while (true) {
+            iter--;
+            tr->genParam((*iter)->ATTR(val), total);
+            total--;
+            if (iter == e->args->begin()) {
+                break;
+            }
+        }
+    }
+
+    Temp res = tr->genCall(e->ATTR(sym)->getEntryLabel());
+    e->ATTR(val) = res;
+}
+\end{lstlisting}
+
+对于 \texttt{FuncDefn}，当函数为前向声明时，直接返回：
+
+\begin{lstlisting}[language=c++]
+if (f->forward_decl)
+    return;
+\end{lstlisting}
+
+另外，在翻译函数体前，先生成 \texttt{GET\_PARAM} 取出参数：
+
+\begin{lstlisting}[language=c++]
+for (auto it = f->formals->begin(); it != f->formals->end(); ++it) {
+    auto v = (*it)->ATTR(sym);
+    tr->genGetParam(v->getTemp(), v->getOrder());
+}
+\end{lstlisting}
+
+其余保持不变。
+
+\subsubsection{翻译为汇编代码}
+
+将 \texttt{CALL}、\texttt{PARAM} 和 \texttt{GET\_PARAM} 翻译为对应的汇编代码。
+
+翻译 \texttt{PARAM} 时，分寄存器传参和栈传参两种情形。在这里我们将传参用寄存器的 \texttt{general} 临时设为 \texttt{false}，以避免被覆盖（一个 trick，现有框架下似乎这是最简单的方法）。
+
+\begin{lstlisting}[language=c++]
+void RiscvDesc::emitParamTac(Tac *t) {
+    if (t->op1.ival < 8) {
+        passParamReg(t, t->op1.ival);
+        // A trick to protect the arg regs from being overwritten, which seems
+        // not being done by the original framework.
+        _reg[RiscvReg::A0 + t->op1.ival]->general = false;
+    } else {
+        int regIndex = getRegForRead(t->op0.var, 0, t->LiveOut);
+        addInstr(RiscvInstr::SW, _reg[regIndex], _reg[RiscvReg::SP], NULL,
+                    (t->op1.ival - 8) * 4, EMPTY_STR, "pass param into stack");
+    }
+}
+\end{lstlisting}
+
+翻译 \texttt{CALL} 时，先将翻译 \texttt{PARAM} 时对传参用寄存器的修改恢复，然后保存寄存器、跳转。
+
+\begin{lstlisting}[language=c++]
+void RiscvDesc::emitCallTac(Tac *t) {
+    // Unprotect the arg regs.
+    for (int i = 0; i < 8; i++)
+        _reg[RiscvReg::A0 + i]->general = true;
+    spillDirtyRegs(t->LiveOut);
+    addInstr(RiscvInstr::JAL, NULL, NULL, NULL, 0, t->op1.label->str_form, EMPTY_STR);
+    int res = getRegForWrite(t->op0.var, 0, 0, t->LiveOut);
+    addInstr(RiscvInstr::MOVE, _reg[res], _reg[RiscvReg::A0],
+        NULL, 0, EMPTY_STR, "move return value to result register");
+}
+\end{lstlisting}
+
+在函数体内，翻译 \texttt{GET\_PARAM}，将参数赋值到对应的符号上：
+
+\begin{lstlisting}[language=c++]
+void RiscvDesc::emitGetParamTac(Tac *t) {
+    if (t->op1.ival < 8) {
+        getParamReg(t, t->op1.ival);
+    } else {
+        int regIndex = getRegForWrite(t->op0.var, 0, 0, t->LiveOut);
+        int frameSize = _frame->getStackFrameSize();
+        addInstr(RiscvInstr::LW, _reg[regIndex], _reg[RiscvReg::SP], NULL, (t->op1.ival - 8) * 4 - frameSize, EMPTY_STR, EMPTY_STR);
+    }
+}   
+\end{lstlisting}
+
+\subsection{Step 10：全局变量}
+
+\subsubsection{词法语法分析}
+
+在 \texttt{FoDList} 中增加 \texttt{DeclStmt} 即可：
+
+\begin{lstlisting}[]
+FoDList : DeclStmt
+            { $$ = new ast::Program($1,POS(@1)); }
+        | FuncDefn
+            { $$ = new ast::Program($1,POS(@1)); }
+        | FoDList FuncDefn
+            { $1->func_and_globals->append($2); $$ = $1; }
+        | FoDList DeclStmt
+            { $1->func_and_globals->append($2); $$ = $1; }
+\end{lstlisting}
+
+\subsubsection{符号表构建}
+
+\underline{原有框架已完成此工作。}
+
+\subsubsection{类型检查}
+
+针对 \texttt{VarDecl}，如果有初始值时，检查其是否为常数字面值：
+
+\begin{lstlisting}[language=c++]
+void SemPass2::visit(ast::VarDecl *decl) {
+    if (decl->init) {
+        decl->init->accept(this);
+        if (decl->ATTR(sym)->isGlobalVar() &&
+            decl->init->getKind() != ast::ASTNode::INT_CONST) {
+            issue(decl->getLocation(), new NotConstInitError());
+        }
+    }
+}
+\end{lstlisting}
+
+\subsubsection{翻译为中间代码}
+
+增加四个 TAC 类型：
+
+\begin{itemize}
+    \item \texttt{DECL\_GLOB\_VAR label, size, defaults}：声明大小为 \texttt{size}，初始值（可选）为 \texttt{defaults}、名称为 \texttt{label} 全局变量
+    \item \texttt{LOAD\_SYM dest, label}：将 \texttt{label} 的地址存入 \texttt{dest}
+    \item \texttt{LOAD dest, src, offset}：将 \texttt{src + offset} 地址处的 4 字存加载到 \texttt{dest} 中
+    \item \texttt{STORE dest, offset, src}：将 \texttt{src + offset} 地址处的 4 字节存到 \texttt{dest} 所指的内存地址中
+\end{itemize}
+
+对应的翻译代码如下：
+
+翻译 \texttt{VarDecl}，对全局变量的情形进行处理，插入 \texttt{DECL\_GLOB\_VAR} 节点：
+
+\begin{lstlisting}[language=c++]
+void Translation::visit(ast::VarDecl *decl) {
+    ...
+    if (decl->ATTR(sym)->isGlobalVar()) {
+        // Create label for the global variable
+        decl->ATTR(sym)->attachLabel(tr->getNewGlobVarLabel(decl->ATTR(sym)));
+
+        int *defaultValues = NULL;
+        if (decl->init != NULL) {
+            ast::IntConst *intConst = dynamic_cast<ast::IntConst *>(decl->init);
+            defaultValues = new int[1];
+            defaultValues[0] = intConst->value;
+        }
+
+        tr->genDeclGlobVar(decl->ATTR(sym)->getLabel(), 1, defaultValues);
+    }
+    ...
+}
+\end{lstlisting}
+
+对 \texttt{AssignExpr}，存入符号对应的内存中（\texttt{LOAD\_SYM} 和 \texttt{STORE}）：
+
+\begin{lstlisting}[language=c++]
+void Translation::visit(ast::AssignExpr *s) {
+    ...
+    if (ref->ATTR(sym)->isGlobalVar()) {
+        Temp symAddr = tr->genLoadSym(ref->ATTR(sym)->getLabel());
+        tr->genStore(symAddr, 0, s->e->ATTR(val));
+    }
+    ...
+}
+\end{lstlisting}
+
+对 \texttt{LvalueExpr}，从符号对应的内存中读出（\texttt{LOAD\_SYM} 和 \texttt{LOAD}）：
+
+\begin{lstlisting}[language=c++]
+void Translation::visit(ast::LvalueExpr *e) {
+    ref->accept(this);
+    if (ref->ATTR(sym)->isGlobalVar()) {
+        Temp addr = tr->genLoadSym(ref->ATTR(sym)->getLabel());
+        e->ATTR(val) = tr->genLoad(addr, 0);
+    }
+    ...
+}
+\end{lstlisting}
+
+\subsubsection{翻译为汇编代码}
+
+将 \texttt{DECL\_GLOB\_VAR}、\texttt{LOAD\_SYM}、\texttt{LOAD} 和 \texttt{STORE} 翻译为对应的汇编代码。
+
+\texttt{DECL\_GLOB\_VAR} 比较特殊，其不属于任何基本块，需要增加 \texttt{Piece}。我们在 \texttt{Piece} 中增加新的类型 \texttt{VAR\_DECL}，与其关联的值为 \texttt{DECL\_GLOB\_VAR} 的 TAC \texttt{varDecl}。
+
+\begin{lstlisting}[language=c++]
+void TransHelper::genDeclGlobVar(Label label, int size, int *defaultValue) {
+    ptail = ptail->next = new Piece();
+    ptail->kind = Piece::VAR_DECL;
+    ptail->as.varDecl = Tac::DeclGlobVar(label, size, defaultValue);
+}
+\end{lstlisting}
+
+其余 TAC 的翻译比较平凡：
+
+\begin{lstlisting}[language=c++]
+Temp TransHelper::genLoadSym(Label label) {
+    Temp dest = getNewTempI4();
+    chainUp(Tac::LoadSym(dest, label));
+    return dest;
+}
+
+Temp TransHelper::genLoad(Temp src, int offset) {
+    Temp dest = getNewTempI4();
+    chainUp(Tac::Load(dest, src, offset));
+    return dest;
+}
+
+void TransHelper::genStore(Temp dest, int offset, Temp src) {
+    chainUp(Tac::Store(dest, offset, src));
+}
+\end{lstlisting}
+
+\section{思考题}
+
+\begin{enumerate}
+    \item \textbf{Step 9}：\begin{enumerate}
+              \item 结果可能为 \texttt{4} 或 \texttt{3}：\begin{lstlisting}[language=c]
+int sum(int a, int b) {
+    return a + b;
+}
+int b = 1;
+int c = 1;
+int a = sum(b = c, c = b + 1);
+            \end{lstlisting}
+              \item 完全由一方保存，保存一些不会由子过程修改的寄存器会带来额外的保存到栈上的开销；子过程返回时需要用到 \texttt{ra} 的值，不可能在返回之后再恢复父过程的返回地址。
+          \end{enumerate}
+    \item \textbf{Step 10}：\texttt{li v0, <addr>} 或 \texttt{auipc v0, <offset>}。
+\end{enumerate}
+\end{document}
