@@ -150,8 +150,12 @@ ParamList :  /* EMPTY */ { $$ = new ast::VarList(); }
 
 CommaSepParamList : Type IDENTIFIER
                 { $$ = new ast::VarList(); $$->append(new ast::VarDecl($2, $1, POS(@1))); }
+             | Type IDENTIFIER ArrayDims
+                { $$ = new ast::VarList(); $$->append(new ast::VarDecl($2, $1, $3, nullptr, POS(@1), true)); }
              | CommaSepParamList COMMA Type IDENTIFIER
                 { $1->append(new ast::VarDecl($4, $3, POS(@3))); $$ = $1; }
+             | CommaSepParamList COMMA Type IDENTIFIER ArrayDims
+                { $1->append(new ast::VarDecl($4, $3, $5, nullptr, POS(@3), true)); $$ = $1; }
              ;
            
 
@@ -231,9 +235,13 @@ DeclStmt    : Type IDENTIFIER SEMICOLON
                 { $$ = new ast::VarDecl($2, $1, $4, POS(@1)); }
             | Type IDENTIFIER ArrayDims SEMICOLON
                 { $$ = new ast::VarDecl($2, $1, $3, POS(@1)); }
+            | Type IDENTIFIER ArrayDims ASSIGN LBRACE ExprList RBRACE SEMICOLON
+                { $$ = new ast::VarDecl($2, $1, $3, $6, POS(@1)); }
             ;
 ArrayDims   : LBRACK ICONST RBRACK
                 { $$ = new ast::DimList(); $$->append($2); }
+            | LBRACK RBRACK
+                { $$ = new ast::DimList(); $$->append(-1); }
             | ArrayDims LBRACK ICONST RBRACK
                 { $$ = $1; $$->append($3); }
             ;

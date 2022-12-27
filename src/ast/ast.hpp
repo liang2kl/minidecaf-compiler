@@ -184,16 +184,22 @@ class VarDecl : public Statement {
     VarDecl(std::string name, Type *type, DimList *dims, Location *l);
 
     VarDecl(std::string name, Type *type, Expr *init, Location *l);
+    VarDecl(std::string name, Type *type, DimList *dims, ExprList *init,
+            Location *l, bool isParam = false);
+
     virtual void accept(Visitor *);
     virtual void dumpTo(std::ostream &);
 
   public:
     std::string name;
     Type *type;
-    Expr *init;
+    Expr *init = nullptr;
+    ExprList *init_list = nullptr;
 
-    DimList *dims;
+    bool is_param = false;
+    DimList *dims = nullptr;
     bool isArray() { return dims != nullptr; }
+    bool isParam() { return is_param; }
 
     symb::Variable *ATTR(sym); // for semantic analysis
 };

@@ -105,7 +105,7 @@ void Translation::visit(ast::AssignExpr *s) {
     ref->accept(this);
     s->e->accept(this);
 
-    bool isArray = ref->ATTR(sym)->getType()->isArrayType();
+    bool isArray = ref->isArrayRef();
 
     if (ref->ATTR(sym)->isGlobalVar()) {
         mind_assert(ref->ATTR(addr) != NULL);
@@ -391,12 +391,21 @@ void Translation::visit(ast::LvalueExpr *e) {
         mind_assert(ref != NULL);
         ref->accept(this);
 
-        bool isArray = ref->ATTR(sym)->getType()->isArrayType();
+        bool isArrayRef = ref->isArrayRef();
+        bool isArrayType = ref->ATTR(sym)->getType()->isArrayType();
 
-        if (ref->ATTR(sym)->isGlobalVar() || isArray) {
-            e->ATTR(val) = tr->genLoad(ref->ATTR(addr), 0);
+        if (ref->ATTR(sym)->isGlobalVar()) {
+            if (isArrayRef || !isArrayType) {
+                e->ATTR(val) = tr->genLoad(ref->ATTR(addr), 0);
+            } else {
+                e->ATTR(val) = tr->genLoadSym(ref->ATTR(sym)->getLabel());
+            }
         } else {
-            e->ATTR(val) = ref->ATTR(sym)->getTemp();
+            if (isArrayRef) {
+                e->ATTR(val) = tr->genLoad(ref->ATTR(addr), 0);
+            } else {
+                e->ATTR(val) = ref->ATTR(sym)->getTemp();
+            }
         }
 
     } else {
@@ -413,11 +422,10 @@ void Translation::visit(ast::LvalueExpr *e) {
 void Translation::visit(ast::VarRef *ref) {
     Variable *var = ref->ATTR(sym);
     mind_assert(var != nullptr);
-    bool isArray = var->getType()->isArrayType();
+    bool isArrayRef = ref->isArrayRef();
     Temp offset = nullptr;
 
-    if (isArray) {
-        assert(ref->indexList != nullptr);
+    if (isArrayRef) {
         ArrayType *arrayType = dynamic_cast<ArrayType *>(var->getType());
         assert(arrayType != nullptr);
         // Visit the index list in the reversed order
@@ -452,13 +460,13 @@ void Translation::visit(ast::VarRef *ref) {
 
     if (ref->ATTR(sym)->isGlobalVar()) {
         Temp addr = tr->genLoadSym(ref->ATTR(sym)->getLabel());
-        if (isArray) {
+        if (isArrayRef) {
             ref->ATTR(addr) = tr->genAdd(addr, offset);
         } else {
             ref->ATTR(addr) = addr;
         }
     } else {
-        if (isArray) {
+        if (isArrayRef) {
             Temp base = ref->ATTR(sym)->getTemp();
             ref->ATTR(addr) = tr->genAdd(base, offset);
         } else {
@@ -484,8 +492,8 @@ void Translation::visit(ast::VarDecl *decl) {
         // Create label for the global variable
         decl->ATTR(sym)->attachLabel(tr->getNewGlobVarLabel(decl->ATTR(sym)));
 
-        int *defaultValues = NULL;
-        if (decl->init != NULL) {
+        int *defaultValues = nullptr;
+        if (decl->init != nullptr) {
             // TODO: Array
             assert(decl->init->getKind() == ast::ASTNode::INT_CONST);
             ast::IntConst *intConst = dynamic_cast<ast::IntConst *>(decl->init);
@@ -494,6 +502,18 @@ void Translation::visit(ast::VarDecl *decl) {
 
             defaultValues = new int[1];
             defaultValues[0] = intConst->value;
+        } else if (decl->init_list != nullptr) {
+            mind_assert(t->isArrayType());
+            defaultValues = new int[arrLength]();
+
+            int i = 0;
+            for (auto iter = decl->init_list->begin();
+                 iter != decl->init_list->end(); iter++, i++) {
+                assert((*iter)->getKind() == ast::ASTNode::INT_CONST);
+                ast::IntConst *intConst = dynamic_cast<ast::IntConst *>(*iter);
+                mind_assert(intConst != NULL);
+                defaultValues[i] = intConst->value;
+            }
         }
 
         tr->genDeclGlobVar(decl->ATTR(sym)->getLabel(), arrLength,
@@ -503,7 +523,30 @@ void Translation::visit(ast::VarDecl *decl) {
         if (at != nullptr) {
             Temp temp = tr->genAlloc(arrLength);
             decl->ATTR(sym)->attachTemp(temp);
-            // TODO: Array initialization
+
+            if (decl->init_list != nullptr) {
+                int i = 0;
+                for (auto iter = decl->init_list->begin();
+                     iter != decl->init_list->end(); iter++, i++) {
+                    (*iter)->accept(this);
+                    tr->genStore(temp, i * 4, (*iter)->ATTR(val));
+                }
+
+                int remaining = arrLength - decl->init_list->length();
+                if (remaining > 0) {
+                    // Fill the rest with 0
+                    Temp len = tr->genLoadImm4(remaining);
+                    Temp startAddr = tr->genAdd(
+                        temp, tr->genLoadImm4(decl->init_list->length() * 4));
+                    tr->genParam(startAddr, 0);
+                    tr->genParam(len, 1);
+                    tr->genParam(tr->genLoadImm4(0), 2);
+                    Label l = tr->getNewLabel();
+                    l->target = true;
+                    l->str_form = "fill_n";
+                    tr->genCall(l);
+                }
+            }
         } else {
             decl->ATTR(sym)->attachTemp(tr->getNewTempI4());
             if (decl->init != NULL) {

@@ -291,6 +291,7 @@ void SemPass2::visit(ast::FuncCallExpr *e) {
     Symbol *s = scopes->lookup(e->name, e->getLocation());
     Function *func;
     size_t numArgs = 0;
+    util::List<mind::type::Type *>::iterator funcArgTypeIter;
 
     if (s == nullptr) {
         issue(e->getLocation(), new SymbolNotFoundError(e->name));
@@ -303,8 +304,17 @@ void SemPass2::visit(ast::FuncCallExpr *e) {
     func = dynamic_cast<Function *>(s);
     mind_assert(func != nullptr);
 
-    for (auto arg = e->args->begin(); arg != e->args->end(); ++arg) {
+    if (func->getType()->numOfParameters() != e->args->length()) {
+        issue(e->getLocation(), new BadArgCountError(func));
+        goto issue_error_type;
+    }
+
+    funcArgTypeIter = func->getType()->getArgList()->begin();
+
+    for (auto arg = e->args->begin(); arg != e->args->end();
+         ++arg, ++funcArgTypeIter) {
         (*arg)->accept(this);
+        expect(*arg, *funcArgTypeIter);
         ++numArgs;
     }
 
@@ -341,17 +351,14 @@ void SemPass2::visit(ast::VarRef *ref) {
         goto issue_error_type;
 
     } else {
-        if (!ref->isArrayRef() && v->getType()->isArrayType()) {
-            issue(ref->getLocation(), new NotArrayError());
-            goto issue_error_type;
-        } else if (ref->isArrayRef() && !v->getType()->isArrayType()) {
+        if (ref->isArrayRef() && !v->getType()->isArrayType()) {
             issue(ref->getLocation(), new NotVariableError(v));
             goto issue_error_type;
         }
 
         ref->ATTR(sym) = (Variable *)v;
 
-        if (v->getType()->isArrayType()) {
+        if (ref->isArrayRef()) {
             mind_assert(ref->indexList != nullptr);
 
             ArrayType *at = dynamic_cast<ArrayType *>(v->getType());
@@ -393,17 +400,41 @@ issue_error_type:
 void SemPass2::visit(ast::VarDecl *decl) {
     if (decl->isArray()) {
         for (auto dim = decl->dims->begin(); dim != decl->dims->end(); ++dim) {
-            if ((*dim) <= 0) {
-                issue(decl->getLocation(), new ZeroLengthedArrayError());
+            if (*dim <= 0) {
+                if (!decl->isParam() || dim != decl->dims->begin())
+                    issue(decl->getLocation(), new ZeroLengthedArrayError());
             }
         }
     }
+
     if (decl->init) {
+        if (decl->isArray())
+            issue(decl->getLocation(), new NotArrayError());
         decl->init->accept(this);
-        // TODO: Array
         if (decl->ATTR(sym)->isGlobalVar() &&
             decl->init->getKind() != ast::ASTNode::INT_CONST) {
             issue(decl->getLocation(), new NotConstInitError());
+        }
+        if (!decl->init->ATTR(type)->compatible(decl->ATTR(sym)->getType()))
+            issue(decl->getLocation(),
+                  new IncompatibleError(decl->ATTR(sym)->getType(),
+                                        decl->init->ATTR(type)));
+    } else if (decl->init_list) {
+        if (!decl->isArray())
+            issue(decl->getLocation(), new NotArrayError());
+
+        // ArrayType *at = dynamic_cast<ArrayType
+        // *>(decl->ATTR(sym)->getType()); if (decl->init_list->length() >
+        // at->getDimList()->length())
+        //     issue(decl->getLocation(), new BadIndexError());
+
+        for (auto init = decl->init_list->begin();
+             init != decl->init_list->end(); ++init) {
+            (*init)->accept(this);
+            if (decl->ATTR(sym)->isGlobalVar() &&
+                (*init)->getKind() != ast::ASTNode::INT_CONST) {
+                issue(decl->getLocation(), new NotConstInitError());
+            }
         }
     }
 }
