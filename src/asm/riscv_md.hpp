@@ -106,6 +106,7 @@ struct RiscvInstr : public Instr {
         OR,
         JAL,
         LA,
+        ADDI,
         // You could add other instructions/pseudo instructions here
     } op_code; // operation code
 
@@ -184,6 +185,8 @@ class RiscvDesc : public MachineDesc {
     void emitLoadSymTac(tac::Tac *);
     void emitLoadTac(tac::Tac *);
     void emitStoreTac(tac::Tac *);
+
+    void emitAllocTac(tac::Tac *);
 
     /*** sketch for peephole optimizer (inside a basic block) ***/
     void simplePeephole(RiscvInstr *);

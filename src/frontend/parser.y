@@ -26,6 +26,7 @@
 #include "ast/ast.hpp"
 #include "location.hpp"
 #include "parser.hpp"
+#include "3rdparty/vector.hpp"
 
 using namespace mind;
 
@@ -50,7 +51,6 @@ void scan_end();
 %define api.token.prefix {TOK_}
 %token
    END  0  "end of file"
-   BOOL "bool"
    INT  "int"
    RETURN "return"
    IF "if"
@@ -78,7 +78,6 @@ void scan_end();
    LNOT "!"
    BNOT "~"
    COMMA ","
-   DOT "."
    ASSIGN "="
    QUESTION "?"
    LPAREN "("
@@ -99,7 +98,9 @@ void scan_end();
 %nterm<mind::ast::VarDecl*> DeclStmt
 %nterm<mind::ast::Expr*> Expr
 %nterm<mind::ast::VarRef*> VarRef
-%nterm<mind::ast::ExprList*> ExprList CommaSepExprList
+%nterm<mind::ast::ExprList*> ExprList CommaSepExprList ArrayIndex
+%nterm<mind::ast::DimList*> ArrayDims
+
 /*   SUBSECTION 2.2: associativeness & precedences */
 %right ASSIGN
 %right QUESTION
@@ -228,9 +229,23 @@ DeclStmt    : Type IDENTIFIER SEMICOLON
                 { $$ = new ast::VarDecl($2, $1, POS(@1)); }
             | Type IDENTIFIER ASSIGN Expr SEMICOLON
                 { $$ = new ast::VarDecl($2, $1, $4, POS(@1)); }
+            | Type IDENTIFIER ArrayDims SEMICOLON
+                { $$ = new ast::VarDecl($2, $1, $3, POS(@1)); }
+            ;
+ArrayDims   : LBRACK ICONST RBRACK
+                { $$ = new ast::DimList(); $$->append($2); }
+            | ArrayDims LBRACK ICONST RBRACK
+                { $$ = $1; $$->append($3); }
             ;
 VarRef      : IDENTIFIER
                 { $$ = new ast::VarRef($1, POS(@1)); }
+            | IDENTIFIER ArrayIndex
+                { $$ = new ast::VarRef($1, $2, POS(@1)); }
+            ;
+ArrayIndex  : LBRACK Expr RBRACK
+                { $$ = new ast::ExprList(); $$->append($2); }
+            | ArrayIndex LBRACK Expr RBRACK
+                { $$ = $1; $$->append($3); }
             ;
 Expr        : ICONST
                 { $$ = new ast::IntConst($1, POS(@1)); }

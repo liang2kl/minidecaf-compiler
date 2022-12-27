@@ -210,6 +210,12 @@ class NotConstInitError : public MindError {
     NotConstInitError();
     virtual void printTo(std::ostream &);
 };
+
+class BadIndexError : public MindError {
+  public:
+    BadIndexError();
+    virtual void printTo(std::ostream &);
+};
 } // namespace err
 } // namespace mind
 

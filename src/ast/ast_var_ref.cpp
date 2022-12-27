@@ -30,6 +30,15 @@ VarRef::VarRef(std::string n, Location *l) {
     ATTR(sym) = NULL;
 }
 
+VarRef::VarRef(std::string n, ExprList *i, Location *l) {
+    setBasicInfo(VAR_REF, l);
+
+    var = n;
+    indexList = i;
+
+    ATTR(sym) = NULL;
+}
+
 /* Visits the current node.
  *
  * PARAMETERS:

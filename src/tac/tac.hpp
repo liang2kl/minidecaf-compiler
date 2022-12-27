@@ -101,6 +101,7 @@ struct Tac {
         LOAD_SYM,
         LOAD,
         STORE,
+        ALLOC,
     } Kind;
 
     // Operand type
@@ -155,10 +156,11 @@ struct Tac {
     static Tac *Call(Temp dest, Label func);
     static Tac *Param(Temp src, int index);
     static Tac *GetParam(Temp dest, int index);
-    static Tac *DeclGlobVar(Label label, int size, int *defaultValue);
+    static Tac *DeclGlobVar(Label label, int length, int *defaultValue);
     static Tac *LoadSym(Temp dest, Label label);
     static Tac *Load(Temp dest, Temp src, int offset);
     static Tac *Store(Temp dest, int offset, Temp src);
+    static Tac *Alloc(Temp dest, int size);
 
     // dumps a single tac node to some output stream
     void dump(std::ostream &);

@@ -493,10 +493,10 @@ void TransHelper::genMarkLabel(Label label) { chainUp(Tac::Mark(label)); }
  */
 void TransHelper::genMemo(const char *comment) { chainUp(Tac::Memo(comment)); }
 
-void TransHelper::genDeclGlobVar(Label label, int size, int *defaultValue) {
+void TransHelper::genDeclGlobVar(Label label, int length, int *defaultValue) {
     ptail = ptail->next = new Piece();
     ptail->kind = Piece::VAR_DECL;
-    ptail->as.varDecl = Tac::DeclGlobVar(label, size, defaultValue);
+    ptail->as.varDecl = Tac::DeclGlobVar(label, length, defaultValue);
 }
 
 Temp TransHelper::genLoadSym(Label label) {
@@ -513,6 +513,12 @@ Temp TransHelper::genLoad(Temp src, int offset) {
 
 void TransHelper::genStore(Temp dest, int offset, Temp src) {
     chainUp(Tac::Store(dest, offset, src));
+}
+
+Temp TransHelper::genAlloc(int size) {
+    Temp dest = getNewTempI4();
+    chainUp(Tac::Alloc(dest, size));
+    return dest;
 }
 
 /* Retrieves the entire Piece list.

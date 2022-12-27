@@ -197,6 +197,9 @@ void SemPass1::visit(ast::VarDecl *vdecl) {
     vdecl->type->accept(this);
     t = vdecl->type->ATTR(type);
 
+    if (vdecl->isArray())
+        t = new ArrayType(t, vdecl->dims);
+
     // TODO: Add a new symbol to a scope
     // 1. Create a new `Variable` symbol
     // 2. Check for conflict in `scopes`, which is a global variable refering to

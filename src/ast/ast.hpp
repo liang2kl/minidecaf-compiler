@@ -181,7 +181,7 @@ class Program : public ASTNode {
 class VarDecl : public Statement {
   public:
     VarDecl(std::string name, Type *type, Location *l);
-    VarDecl(std::string name, Type *type, int dim, Location *l);
+    VarDecl(std::string name, Type *type, DimList *dims, Location *l);
 
     VarDecl(std::string name, Type *type, Expr *init, Location *l);
     virtual void accept(Visitor *);
@@ -191,6 +191,9 @@ class VarDecl : public Statement {
     std::string name;
     Type *type;
     Expr *init;
+
+    DimList *dims;
+    bool isArray() { return dims != nullptr; }
 
     symb::Variable *ATTR(sym); // for semantic analysis
 };
@@ -418,6 +421,7 @@ class VarRef : public Lvalue {
   public:
     //	  VarRef (Expr* object, SID var_name,Location* l);
     VarRef(std::string var_name, Location *l);
+    VarRef(std::string var_name, ExprList *indexExprs, Location *l);
 
     virtual void accept(Visitor *);
     virtual void dumpTo(std::ostream &);
@@ -425,8 +429,12 @@ class VarRef : public Lvalue {
   public:
     Expr *owner; // only to pass compilation, not used
     std::string var;
+    ExprList *indexList = nullptr;
+
+    bool isArrayRef() { return indexList != nullptr; }
 
     symb::Variable *ATTR(sym); // for tac generation
+    tac::Temp ATTR(addr);
 };
 
 class PointerRef : public Lvalue {

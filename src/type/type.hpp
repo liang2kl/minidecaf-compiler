@@ -93,13 +93,14 @@ class ArrayType : public Type {
   private:
     // the element type
     Type *element_type;
-    int length;
+    ast::DimList *dim_list;
 
   public:
     // Constructor
-    ArrayType(Type *, int length);
+    ArrayType(Type *, ast::DimList *dims);
     // Gets the element type (a.k.a. "the base type of an array")
     Type *getElementType(void);
+    ast::DimList *getDimList(void);
     // Gets the array length
     int getLength(void);
     // Tests whether it is ArrayType

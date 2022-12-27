@@ -410,3 +410,9 @@ NotConstInitError::NotConstInitError() {}
 void NotConstInitError::printTo(std::ostream &os) {
     os << "Only constant expressions are allowed in initializers";
 }
+
+BadIndexError::BadIndexError() {}
+
+void BadIndexError::printTo(std::ostream &os) {
+    os << "Array index is invalid";
+}

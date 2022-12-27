@@ -37,12 +37,13 @@ VarDecl::VarDecl(std::string n, Type *t, Expr *i, Location *l) {
     init = i;
 }
 
-VarDecl::VarDecl(std::string n, Type *t, int d, Location *l) {
+VarDecl::VarDecl(std::string n, Type *t, DimList *d, Location *l) {
 
     setBasicInfo(VAR_DECL, l);
 
     name = n;
     type = t;
+    dims = d;
     init = NULL;
 }
 

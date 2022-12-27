@@ -341,10 +341,37 @@ void SemPass2::visit(ast::VarRef *ref) {
         goto issue_error_type;
 
     } else {
-        ref->ATTR(type) = v->getType();
+        if (!ref->isArrayRef() && v->getType()->isArrayType()) {
+            issue(ref->getLocation(), new NotArrayError());
+            goto issue_error_type;
+        } else if (ref->isArrayRef() && !v->getType()->isArrayType()) {
+            issue(ref->getLocation(), new NotVariableError(v));
+            goto issue_error_type;
+        }
+
         ref->ATTR(sym) = (Variable *)v;
 
-        if (((Variable *)v)->isLocalVar()) {
+        if (v->getType()->isArrayType()) {
+            mind_assert(ref->indexList != nullptr);
+
+            ArrayType *at = dynamic_cast<ArrayType *>(v->getType());
+            mind_assert(at != nullptr);
+
+            if (size_t(at->getDimList()->length()) !=
+                ref->indexList->length()) {
+                issue(ref->getLocation(), new BadIndexError());
+                goto issue_error_type;
+            }
+
+            for (auto index = ref->indexList->begin();
+                 index != ref->indexList->end(); ++index) {
+                (*index)->accept(this);
+                expect(*index, BaseType::Int);
+            }
+            ref->ATTR(type) = at->getElementType();
+            ref->ATTR(lv_kind) = ast::Lvalue::ARRAY_ELE;
+        } else {
+            ref->ATTR(type) = v->getType();
             ref->ATTR(lv_kind) = ast::Lvalue::SIMPLE_VAR;
         }
     }
@@ -364,8 +391,16 @@ issue_error_type:
  *   decl     - the ast::VarDecl node
  */
 void SemPass2::visit(ast::VarDecl *decl) {
+    if (decl->isArray()) {
+        for (auto dim = decl->dims->begin(); dim != decl->dims->end(); ++dim) {
+            if ((*dim) <= 0) {
+                issue(decl->getLocation(), new ZeroLengthedArrayError());
+            }
+        }
+    }
     if (decl->init) {
         decl->init->accept(this);
+        // TODO: Array
         if (decl->ATTR(sym)->isGlobalVar() &&
             decl->init->getKind() != ast::ASTNode::INT_CONST) {
             issue(decl->getLocation(), new NotConstInitError());

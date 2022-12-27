@@ -216,7 +216,7 @@ void RiscvDesc::emitTac(Tac *t) {
     std::ostringstream oss;
     t->dump(oss);
     addInstr(RiscvInstr::COMMENT, NULL, NULL, NULL, 0, EMPTY_STR,
-             "[TAC] " + oss.str().substr(4));
+             "[" + oss.str().substr(4) + "]");
 
     switch (t->op_code) {
     case Tac::LOAD_IMM4:
@@ -326,6 +326,10 @@ void RiscvDesc::emitTac(Tac *t) {
 
     case Tac::STORE:
         emitStoreTac(t);
+        break;
+
+    case Tac::ALLOC:
+        emitAllocTac(t);
         break;
 
     default:
@@ -655,6 +659,10 @@ void RiscvDesc::emitInstr(RiscvInstr *i) {
         oss << "la" << i->r0->name << ", " << i->l;
         break;
 
+    case RiscvInstr::ADDI:
+        oss << "addi" << i->r0->name << ", " << i->r1->name << ", " << i->i;
+        break;
+
     default:
         mind_assert(false); // other instructions not supported
     }
@@ -703,8 +711,8 @@ void RiscvDesc::emitCallTac(Tac *t) {
     // Unprotect the arg regs.
     for (int i = 0; i < 8; i++)
         _reg[RiscvReg::A0 + i]->general = true;
-    if (!t->LiveOut->contains(t->op0.var))
-        return;
+    // if (!t->LiveOut->contains(t->op0.var))
+    //     return;
     spillDirtyRegs(t->LiveOut);
     addInstr(RiscvInstr::JAL, NULL, NULL, NULL, 0, t->op1.label->str_form,
              EMPTY_STR);
@@ -747,7 +755,7 @@ void RiscvDesc::emitDeclGlobVarTac(tac::Tac *t) {
         emit(EMPTY_STR,
              (std::string(".globl ") + t->op0.label->str_form).c_str(), NULL);
         os << t->op0.label->str_form << ":" << std::endl;
-        emit(EMPTY_STR, (".space " + std::to_string(t->op1.ival)).c_str(),
+        emit(EMPTY_STR, (".space " + std::to_string(4 * t->op1.ival)).c_str(),
              NULL);
     } else {
         // With default value, put to data.
@@ -785,6 +793,20 @@ void RiscvDesc::emitStoreTac(tac::Tac *t) {
     int baseIndex = getRegForRead(t->op0.var, regIndex, t->LiveOut);
     addInstr(RiscvInstr::SW, _reg[regIndex], _reg[baseIndex], NULL, t->op0.ival,
              EMPTY_STR, EMPTY_STR);
+}
+
+void RiscvDesc::emitAllocTac(tac::Tac *t) {
+    if (!t->LiveOut->contains(t->op0.var))
+        return;
+    // Allocate memory on stack.
+    // Modify SP to get enough space for the array.
+    addInstr(RiscvInstr::ADDI, _reg[RiscvReg::SP], _reg[RiscvReg::SP], NULL,
+             t->op1.ival * -4, EMPTY_STR, "allocate memory for array on stack");
+
+    // Get current SP.
+    int regIndex = getRegForWrite(t->op0.var, 0, 0, t->LiveOut);
+    addInstr(RiscvInstr::MOVE, _reg[regIndex], _reg[RiscvReg::SP], NULL, 0,
+             EMPTY_STR, "get current SP");
 }
 
 /* Appends an instruction line to "_tail". (internal helper function)

@@ -609,10 +609,10 @@ Tac *Tac::GetParam(Temp dest, int index) {
     return t;
 }
 
-Tac *Tac::DeclGlobVar(Label label, int size, int *defaultValue) {
+Tac *Tac::DeclGlobVar(Label label, int length, int *defaultValue) {
     Tac *t = allocateNewTac(Tac::DECL_GLOB_VAR);
     t->op0.label = label;
-    t->op1.ival = size;
+    t->op1.ival = length;
     t->op1.memo = (char *)defaultValue;
 
     return t;
@@ -640,6 +640,14 @@ Tac *Tac::Store(Temp dest, int offset, Temp src) {
     t->op0.var = dest;
     t->op0.ival = offset;
     t->op1.var = src;
+
+    return t;
+}
+
+Tac *Tac::Alloc(Temp dest, int size) {
+    Tac *t = allocateNewTac(Tac::ALLOC);
+    t->op0.var = dest;
+    t->op1.ival = size;
 
     return t;
 }
@@ -822,15 +830,18 @@ void Tac::dump(std::ostream &os) {
         break;
 
     case DECL_GLOB_VAR:
-        os << "    decl_glob_var " << op0.label << "[" << op1.ival << "]";
+        os << op0.label << " (global var): "
+           << "[" << op1.ival << "]";
         if (op1.memo != NULL) {
-            os << " {";
+            os << " = {";
             int *defaults = (int *)op1.memo;
             for (int i = 0; i < op1.ival; i++) {
                 os << (i == 0 ? "" : " ") << defaults[i]
                    << (i == op1.ival - 1 ? "" : ",");
             }
             os << "}";
+        } else {
+            os << " = ZERO";
         }
         break;
 
@@ -846,6 +857,10 @@ void Tac::dump(std::ostream &os) {
     case STORE:
         os << "    store *(" << op0.var << " + " << op0.ival << ") <- "
            << op1.var;
+        break;
+
+    case ALLOC:
+        os << "    " << op0.var << " <- alloc " << op1.ival;
         break;
     default:
         mind_assert(false); // unreachable

@@ -75,8 +75,9 @@ class TransHelper {
     Temp genLoadImm4(int);
     void genMarkLabel(Label);
     void genMemo(const char *);
+    Temp genAlloc(int);
     // Global var
-    void genDeclGlobVar(Label label, int size, int *defaultValue);
+    void genDeclGlobVar(Label label, int length, int *defaultValue);
     Temp genLoadSym(Label);
     Temp genLoad(Temp src, int offset);
     void genStore(Temp dest, int offset, Temp src);
