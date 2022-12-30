@@ -391,23 +391,59 @@ void TransHelper::genDeclGlobVar(Label label, int size, int *defaultValue) {
 }
 \end{lstlisting}
 
+对 \texttt{DECL\_GLOB\_VAR} 进行翻译，注意对有初始值和无初始值的区别处理：
+
+\begin{lstlisting}[language=c++]
+void RiscvDesc::emitDeclGlobVarTac(tac::Tac *t) {
+    std::ostream &os(*_result);
+    if (t->op1.memo == NULL) {
+        // Without default value, put to bss.
+        emit(EMPTY_STR, ".bss", NULL);
+        emit(EMPTY_STR,
+                (std::string(".globl ") + t->op0.label->str_form).c_str(), NULL);
+        os << t->op0.label->str_form << ":" << std::endl;
+        emit(EMPTY_STR, (".space " + std::to_string(t->op1.ival)).c_str(),
+                NULL);
+    } else {
+        // With default value, put to data.
+        emit(EMPTY_STR, ".data", NULL);
+        emit(EMPTY_STR,
+                (std::string(".globl ") + t->op0.label->str_form).c_str(), NULL);
+        os << t->op0.label->str_form << ":" << std::endl;
+        int *defaults = (int *)t->op1.memo;
+        for (int i = 0; i < t->op1.ival; i++) {
+            emit(EMPTY_STR, (".word " + std::to_string(defaults[i])).c_str(),
+                    NULL);
+        }
+    }
+}    
+\end{lstlisting}
+
 其余 TAC 的翻译比较平凡：
 
 \begin{lstlisting}[language=c++]
-Temp TransHelper::genLoadSym(Label label) {
-    Temp dest = getNewTempI4();
-    chainUp(Tac::LoadSym(dest, label));
-    return dest;
+void RiscvDesc::emitLoadSymTac(tac::Tac *t) {
+    if (!t->LiveOut->contains(t->op0.var))
+        return;
+    int regIndex = getRegForWrite(t->op0.var, 0, 0, t->LiveOut);
+    addInstr(RiscvInstr::LA, _reg[regIndex], NULL, NULL, 0,
+                t->op1.label->str_form, EMPTY_STR);
 }
 
-Temp TransHelper::genLoad(Temp src, int offset) {
-    Temp dest = getNewTempI4();
-    chainUp(Tac::Load(dest, src, offset));
-    return dest;
+void RiscvDesc::emitLoadTac(tac::Tac *t) {
+    if (!t->LiveOut->contains(t->op0.var))
+        return;
+    int baseIndex = getRegForRead(t->op1.var, 0, t->LiveOut);
+    int regIndex = getRegForWrite(t->op0.var, baseIndex, 0, t->LiveOut);
+    addInstr(RiscvInstr::LW, _reg[regIndex], _reg[baseIndex], NULL, t->op1.ival,
+                EMPTY_STR, EMPTY_STR);
 }
 
-void TransHelper::genStore(Temp dest, int offset, Temp src) {
-    chainUp(Tac::Store(dest, offset, src));
+void RiscvDesc::emitStoreTac(tac::Tac *t) {
+    int regIndex = getRegForRead(t->op1.var, 0, t->LiveOut);
+    int baseIndex = getRegForRead(t->op0.var, regIndex, t->LiveOut);
+    addInstr(RiscvInstr::SW, _reg[regIndex], _reg[baseIndex], NULL, t->op0.ival,
+                EMPTY_STR, EMPTY_STR);
 }
 \end{lstlisting}
 
